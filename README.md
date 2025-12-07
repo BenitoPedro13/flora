@@ -6,14 +6,14 @@ Vegetation Analysis & Visualization Platform.
 
 This is a monorepo containing:
 
-- **[`apps/frontend`](./apps/frontend)**: Next.js 14 Web Application (Leaflet Map, Dashboard).
+- **[`apps/frontend`](./apps/frontend)**: Next.js Web Application (Leaflet Map, Dashboard).
 - **[`apps/backend`](./apps/backend)**: FastAPI Service (Satellite Data Provider, GEE Integration).
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js (v18+) & pnpm
+- Node.js (v22+) & pnpm
 - Python (v3.9+) & Poetry
 - Make (optional)
 
