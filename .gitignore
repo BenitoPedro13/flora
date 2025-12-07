@@ -28,3 +28,4 @@ apps/frontend/.env.production.local
 .env
 tmp/
 coverage/
+test_env/
