@@ -46,18 +46,22 @@ export const fetchSatelliteStats = async (
 
 export const fetchSatelliteTile = async (
   geometry: Geometry,
-  dateRange: DateRange
+  dateRange: DateRange,
+  layerType: string = "rgb"
 ): Promise<string> => {
-  const response = await fetch(`${API_URL}/satellite/tile`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      geometry,
-      date_range: dateRange,
-    }),
-  });
+  const response = await fetch(
+    `${API_URL}/satellite/tile?layer_type=${layerType}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        geometry,
+        date_range: dateRange,
+      }),
+    }
+  );
 
   if (!response.ok) {
     const error = await response.json();

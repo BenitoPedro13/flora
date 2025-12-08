@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { MapContainer, TileLayer } from "react-leaflet";
+import { useEffect, useState, useCallback } from "react";
+import { MapContainer, TileLayer, LayersControl } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import DrawControl from "./DrawControl";
-import { fetchSatelliteStats, fetchSatelliteTile } from "@/lib/api";
+import DashboardControl from "./DashboardControl";
+import { fetchSatelliteStats, fetchSatelliteTile, SatelliteStats, Geometry } from "@/lib/api";
 
 // Fix Leaflet icon issue in Next.js
 import L from "leaflet";
@@ -13,11 +14,27 @@ import L from "leaflet";
 const MapComponent = () => {
     const [mounted, setMounted] = useState(false);
     const [tileUrl, setTileUrl] = useState<string | null>(null);
+    const [stats, setStats] = useState<SatelliteStats | null>(null);
+    const [layerType, setLayerType] = useState<string>("rgb");
+    const [geometry, setGeometry] = useState<Geometry | null>(null); // Store current geometry
+
+    const updateVisualization = useCallback(async (geo: Geometry, type: string) => {
+        try {
+            const url = await fetchSatelliteTile(
+                geo,
+                { start_date: "2023-01-01", end_date: "2023-06-01" },
+                type
+            );
+            setTileUrl(url);
+        } catch (err) {
+            console.error("Error updating tile:", err);
+        }
+    }, []);
 
     useEffect(() => {
         // eslint-disable-next-line
         setMounted(true);
-        // Fix default icon path issues
+        // Fix leaflet icon
         // @ts-expect-error - Leaflet icon default prototype manipulation
         delete L.Icon.Default.prototype._getIconUrl;
         L.Icon.Default.mergeOptions({
@@ -30,6 +47,14 @@ const MapComponent = () => {
         });
     }, []);
 
+    // Effect to refresh tile when layerType changes
+    useEffect(() => {
+        if (geometry && layerType) {
+            // eslint-disable-next-line
+            updateVisualization(geometry, layerType);
+        }
+    }, [layerType, geometry, updateVisualization]);
+
     const handleCreated = async (e: L.DrawEvents.Created) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const layer = e.layer as any;
@@ -39,29 +64,24 @@ const MapComponent = () => {
             // Extract only the geometry part, ensuring valid structure
             // GEE expects coordinates, usually we send the whole geometry object or just coords
             // Our backend model expects { type: "Polygon", coordinates: [...] }
+            const geo = geoJson.geometry;
+            setGeometry(geo); // Save for later updates
 
-            console.log("Fetching satellite data...", geoJson.geometry);
+            console.log("Fetching satellite data...", geo);
 
             try {
-                // Parallel fetch: Stats + Tile
-                const [stats, url] = await Promise.all([
-                    fetchSatelliteStats(
-                        geoJson.geometry,
-                        { start_date: "2023-01-01", end_date: "2023-06-01" } // Hardcoded for MVP
-                    ),
-                    fetchSatelliteTile(
-                        geoJson.geometry,
-                        { start_date: "2023-01-01", end_date: "2023-06-01" } // Hardcoded for MVP
-                    )
-                ]);
+                // Fetch Stats once
+                fetchSatelliteStats(
+                    geo,
+                    { start_date: "2023-01-01", end_date: "2023-06-01" } // Hardcoded for MVP
+                ).then(s => setStats(s)).catch(e => console.error(e));
 
-                console.log("Satellite Stats:", stats);
-                console.log("Tile URL:", url);
+                // Fetch Tile (using current layerType)
+                updateVisualization(geo, layerType);
 
-                setTileUrl(url);
-                alert(`NDVI Mean: ${stats.ndvi?.mean.toFixed(2)}\nTile Layer added!`);
+                alert(`NDVI Mean: ${stats?.ndvi?.mean.toFixed(2) || 'N/A'} \nTile Layer added!`);
             } catch (err) {
-                console.error("Error fetching stats:", err);
+                console.error("Error fetching data:", err);
                 alert("Failed to fetch satellite data. Check console.");
             }
         }
@@ -69,6 +89,9 @@ const MapComponent = () => {
 
     const handleDeleted = () => {
         console.log("Polygon deleted");
+        setTileUrl(null);
+        setStats(null);
+        setGeometry(null);
     };
 
     if (!mounted) return null;
@@ -80,17 +103,37 @@ const MapComponent = () => {
             style={{ height: "100%", width: "100%" }}
             className="z-0"
         >
-            <TileLayer
-                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            <LayersControl position="topright">
+                <LayersControl.BaseLayer checked name="Street (OSM)">
+                    <TileLayer
+                        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                    />
+                </LayersControl.BaseLayer>
+                <LayersControl.BaseLayer name="Satellite (Esri)">
+                    <TileLayer
+                        attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+                        url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+                    />
+                </LayersControl.BaseLayer>
+
+                {tileUrl && (
+                    <LayersControl.Overlay checked name="Crop Data Layer">
+                        <TileLayer
+                            url={tileUrl}
+                            opacity={0.8}
+                            zIndex={100}
+                        />
+                    </LayersControl.Overlay>
+                )}
+            </LayersControl>
+
+            <DashboardControl
+                stats={stats}
+                layerType={layerType}
+                onLayerChange={setLayerType}
             />
-            {tileUrl && (
-                <TileLayer
-                    url={tileUrl}
-                    opacity={0.7}
-                    zIndex={100}
-                />
-            )}
+
             <DrawControl onCreated={handleCreated} onDeleted={handleDeleted} />
         </MapContainer>
     );

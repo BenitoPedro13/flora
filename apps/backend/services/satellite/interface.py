@@ -24,8 +24,6 @@ class SatelliteProvider(ABC):
         pass
     
     @abstractmethod
-    async def get_tile_url(self, geometry: Geometry, date_range: DateRange) -> str:
-        """
-        Get a tile layer URL for visualization.
-        """
+    async def get_tile_url(self, geometry: Geometry, date_range: DateRange, layer_type: str = "rgb") -> str:
+        """Get the tile URL for the map visualization."""
         pass

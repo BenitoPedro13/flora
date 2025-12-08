@@ -80,7 +80,7 @@ class GEEProvider(SatelliteProvider):
             metadata={"image_count": count, "provider": "GEE"}
         )
 
-    async def get_tile_url(self, geometry: Geometry, date_range: DateRange) -> str:
+    async def get_tile_url(self, geometry: Geometry, date_range: DateRange, layer_type: str = "rgb") -> str:
         if not self._authenticated:
             await self.authenticate()
 
@@ -91,13 +91,30 @@ class GEEProvider(SatelliteProvider):
             .filterDate(date_range.start_date, date_range.end_date) \
             .filter(ee.Filter.lt('CLOUDY_PIXEL_PERCENTAGE', 20))
             
-        vis_params = {
-            'min': 0.0,
-            'max': 3000, # Sentinel-2 SR values are 0-10000 (scaled by 10k), so 3000 is ~0.3 reflectance
-            'bands': ['B4', 'B3', 'B2'], # RGB
-        }
+        if layer_type == "ndvi":
+            # NDVI Visualization
+            def add_ndvi(image):
+                ndvi = image.normalizedDifference(['B8', 'B4']).rename('NDVI')
+                return image.addBands(ndvi)
+            
+            # Use median to reduce clouds/shadows
+            image = s2.map(add_ndvi).median().select('NDVI')
+            vis_params = {
+                'min': 0,
+                'max': 1,
+                'palette': ['red', 'yellow', 'green'] # Low vegetation -> High vegetation
+            }
+        else:
+            # RGB Visualization (Default)
+            vis_params = {
+                'min': 0.0,
+                'max': 3000,
+                'bands': ['B4', 'B3', 'B2'],
+            }
+            image = s2.median()
         
-        # Get map ID for the mosaic
-        image = s2.median().visualize(**vis_params)
-        map_id = image.getMapId()
+        # Get map ID
+        # Clip to the region so it looks clean (optional, but requested implicitly by user focused on "field")
+        # .clip(region) might be expensive for tiles but let's try strict clipping for better visuals
+        map_id = image.visualize(**vis_params).clip(region).getMapId()
         return map_id['tile_fetcher'].url_format

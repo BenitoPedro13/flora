@@ -20,9 +20,10 @@ async def get_stats(
 async def get_tile(
     geometry: Geometry,
     date_range: DateRange,
+    layer_type: str = "rgb",
     provider: SatelliteProvider = Depends(get_satellite_provider)
 ):
     try:
-        return await provider.get_tile_url(geometry, date_range)
+        return await provider.get_tile_url(geometry, date_range, layer_type)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
