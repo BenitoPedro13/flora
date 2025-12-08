@@ -93,7 +93,7 @@ class GEEProvider(SatelliteProvider):
             
         vis_params = {
             'min': 0.0,
-            'max': 0.3, # Sentinel-2 values are 0-1 range usually roughly
+            'max': 3000, # Sentinel-2 SR values are 0-10000 (scaled by 10k), so 3000 is ~0.3 reflectance
             'bands': ['B4', 'B3', 'B2'], # RGB
         }
         
