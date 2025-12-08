@@ -7,7 +7,14 @@ Next.js 16 Web Application for visualizing satellite data.
 - **Framework**: Next.js 16 (App Router)
 - **Language**: TypeScript
 - **Styling**: TailwindCSS v4
-- **Maps**: React Leaflet
+- **Maps**: React Leaflet / Leaflet Draw
+
+## 🌟 Features
+
+- **Field Drawing**: Draw polygons to define Areas of Interest.
+- **Dashboard Control**: Side-panel for real-time analysis.
+- **Visualization Selector**: Toggle between RGB and NDVI layers.
+- **Base Layers**: Switch between OSM and Esri Satellite.
 
 ## Development
 

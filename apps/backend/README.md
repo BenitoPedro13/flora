@@ -16,13 +16,20 @@ poetry install
 You must authenticate with your Google account to access satellite data.
 
 ```bash
-cd apps/backend
-poetry run earthengine authenticate
+# Recommended
+make auth
 ```
 
-Follow the instructions in the terminal (it will open a browser window).
+### 3. Configuration (.env)
 
-### 3. Run Development Server
+If you are using a specific Google Cloud Project, create a `.env` file:
+
+```bash
+cp .env.example .env
+# Edit .env and set GEE_PROJECT=your-project-id
+```
+
+### 4. Run Development Server
 
 ```bash
 # From root

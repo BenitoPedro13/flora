@@ -34,5 +34,22 @@ This is a monorepo containing:
 
 ## 🛠️ Commands
 
-- `make lint`: Run linters for both projects.
+- `make install`: Install dependencies for both apps.
+- `make auth`: Authenticate with Google Earth Engine (Required).
+- `make dev`: Start both servers.
+- `make lint`: Run linters.
 - `make test`: Run unit tests.
+
+## ✨ Features
+
+- **Satellite Analysis**:
+  - Real-time **NDVI** (Vegetation Health) calculation using Sentinel-2.
+  - **True Color** (RGB) satellite imagery overlay.
+- **Interactive Map**:
+  - Draw Field Polygons.
+  - Switch between Street and Satellite base maps.
+  - Live Dashboard side-panel.
+- **Modern Tech**:
+  - **Monorepo**: Turbo/Make managed.
+  - **Backend**: FastAPI, Google Earth Engine, Pydantic.
+  - **Frontend**: Next.js 16, React Leaflet, TailwindCSS.
