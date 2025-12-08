@@ -1,22 +1,37 @@
-# Flora Backend 🐍
+# Flora Backend
 
-FastAPI service for retrieving and processing satellite data.
-
-## Features
-
-- **Provider Pattern**: Abstracted data sources (Google Earth Engine, Sentinel Hub, etc.).
-- **FastAPI**: High performance async API.
-- **Geospatial**: Built-in support for GeoJSON and raster data.
+FastAPI service for the Flora satellite visualization app.
 
 ## Setup
 
+### 1. Install Dependencies
+
 ```bash
+cd apps/backend
 poetry install
-poetry run uvicorn main:app --reload
 ```
 
-## Environment Variables
+### 2. Google Earth Engine Authentication (Required)
 
-Copy `.env.example` to `.env` (if applicable) and set:
+You must authenticate with your Google account to access satellite data.
 
-- `GOOGLE_APPLICATION_CREDENTIALS`: Path to your service account key (for GEE).
+```bash
+cd apps/backend
+poetry run earthengine authenticate
+```
+
+Follow the instructions in the terminal (it will open a browser window).
+
+### 3. Run Development Server
+
+```bash
+# From root
+make dev
+```
+
+## Testing
+
+```bash
+cd apps/backend
+poetry run pytest
+```

@@ -3,13 +3,22 @@ from typing import Dict, Any, List
 from services.satellite.interface import SatelliteProvider
 from services.satellite.models import Geometry, DateRange, SatelliteStats, BandData
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 class GEEProvider(SatelliteProvider):
     def __init__(self):
         self._authenticated = False
+        self.project_id = os.getenv("GEE_PROJECT")
 
     async def authenticate(self) -> bool:
         try:
-            ee.Initialize()
+            if self.project_id:
+                ee.Initialize(project=self.project_id)
+            else:
+                ee.Initialize()
             self._authenticated = True
             return True
         except Exception as e:

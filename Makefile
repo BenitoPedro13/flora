@@ -15,6 +15,12 @@ install:
 	@echo "Installing Frontend dependencies..."
 	cd apps/frontend && pnpm install
 
+# Authentication
+auth:
+	@echo "Authenticating with Google Earth Engine..."
+	cd apps/backend && /Users/benitoxavier/Library/Python/3.9/bin/poetry run earthengine authenticate
+
+
 # Development
 dev:
 	@echo "Starting servers... (Press Ctrl+C to stop)"
