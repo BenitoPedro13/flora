@@ -19,7 +19,7 @@ install:
 dev:
 	@echo "Starting servers... (Press Ctrl+C to stop)"
 	@# We use npx concurrently to avoid global install requirement, or pnpm dlx
-	concurrently "cd apps/backend && poetry run uvicorn main:app --reload --port 8000" "cd apps/frontend && pnpm dev"
+	concurrently "cd apps/backend && /Users/benitoxavier/Library/Python/3.9/bin/poetry run uvicorn main:app --reload --port 8000" "cd apps/frontend && pnpm dev"
 
 # Testing
 test:

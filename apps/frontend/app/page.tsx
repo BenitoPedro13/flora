@@ -1,9 +1,4 @@
-import dynamic from 'next/dynamic';
-
-const Map = dynamic(() => import('@/components/map/Map'), {
-  ssr: false,
-  loading: () => <div className="h-full w-full bg-gray-100 animate-pulse flex items-center justify-center">Loading Map...</div>
-});
+import MapWrapper from '@/components/map/MapWrapper';
 
 export default function Home() {
   return (
@@ -12,7 +7,7 @@ export default function Home() {
         Flora 🛰️
       </nav>
       <div className="flex-1 relative">
-        <Map />
+        <MapWrapper />
       </div>
     </main>
   );

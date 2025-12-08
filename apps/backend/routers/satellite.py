@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
-from ..dependencies import get_satellite_provider
-from ..services.satellite.interface import SatelliteProvider
-from ..services.satellite.models import SatelliteStats, Geometry, DateRange
+from dependencies import get_satellite_provider
+from services.satellite.interface import SatelliteProvider
+from services.satellite.models import SatelliteStats, Geometry, DateRange
 
 router = APIRouter(prefix="/satellite", tags=["satellite"])
 

@@ -1,7 +1,7 @@
 import ee
 from typing import Dict, Any, List
-from ..interface import SatelliteProvider
-from ..models import Geometry, DateRange, SatelliteStats, BandData
+from services.satellite.interface import SatelliteProvider
+from services.satellite.models import Geometry, DateRange, SatelliteStats, BandData
 
 class GEEProvider(SatelliteProvider):
     def __init__(self):

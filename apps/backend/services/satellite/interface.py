@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from .models import Geometry, DateRange, SatelliteStats
+from services.satellite.models import Geometry, DateRange, SatelliteStats
 
 class SatelliteProvider(ABC):
     """

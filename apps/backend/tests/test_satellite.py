@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
-from apps.backend.services.satellite.providers.gee import GEEProvider
-from apps.backend.services.satellite.models import Geometry, DateRange
+from services.satellite.providers.gee import GEEProvider
+from services.satellite.models import Geometry, DateRange
 
 @pytest.mark.asyncio
 async def test_gee_provider_auth_failure():
@@ -15,7 +15,7 @@ async def test_gee_provider_auth_failure():
 async def test_get_stats_flow():
     """Test get_stats calls GEE correctly."""
     # Patch the 'ee' module imported in the provider file
-    with patch("apps.backend.services.satellite.providers.gee.ee") as mock_ee:
+    with patch("services.satellite.providers.gee.ee") as mock_ee:
         
         # Setup mocks
         mock_image_collection = MagicMock()

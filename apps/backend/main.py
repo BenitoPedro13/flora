@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .routers import satellite
+from routers import satellite
 
 app = FastAPI(title="Flora Backend", description="Satellite Data API")
 
