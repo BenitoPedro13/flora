@@ -5,6 +5,7 @@ import { MapContainer, TileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import DrawControl from "./DrawControl";
+import { fetchSatelliteStats } from "@/lib/api";
 
 // Fix Leaflet icon issue in Next.js
 import L from "leaflet";
@@ -28,13 +29,29 @@ const MapComponent = () => {
         });
     }, []);
 
-    const handleCreated = (e: L.DrawEvents.Created) => {
+    const handleCreated = async (e: L.DrawEvents.Created) => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const layer = e.layer as any;
-        // toGeoJSON exists on Layer but types might be loose in @types/leaflet. 
-        // Cast to any locally or specific interface if needed, but avoiding global any in signature.
+
         if (layer.toGeoJSON) {
-            console.log("Polygon created:", layer.toGeoJSON());
+            const geoJson = layer.toGeoJSON();
+            // Extract only the geometry part, ensuring valid structure
+            // GEE expects coordinates, usually we send the whole geometry object or just coords
+            // Our backend model expects { type: "Polygon", coordinates: [...] }
+
+            console.log("Fetching satellite data...", geoJson.geometry);
+
+            try {
+                const stats = await fetchSatelliteStats(
+                    geoJson.geometry,
+                    { start_date: "2023-01-01", end_date: "2023-06-01" } // Hardcoded for MVP
+                );
+                console.log("Satellite Stats:", stats);
+                alert(`NDVI Mean: ${stats.ndvi?.mean.toFixed(2)}\n(Check console for full details)`);
+            } catch (err) {
+                console.error("Error fetching stats:", err);
+                alert("Failed to fetch satellite data. Check console.");
+            }
         }
     };
 
