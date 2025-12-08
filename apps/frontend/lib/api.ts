@@ -43,3 +43,27 @@ export const fetchSatelliteStats = async (
 
   return response.json();
 };
+
+export const fetchSatelliteTile = async (
+  geometry: Geometry,
+  dateRange: DateRange
+): Promise<string> => {
+  const response = await fetch(`${API_URL}/satellite/tile`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      geometry,
+      date_range: dateRange,
+    }),
+  });
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(error.detail || "Failed to fetch satellite tile");
+  }
+
+  // Returns the URL string directly
+  return response.json();
+};

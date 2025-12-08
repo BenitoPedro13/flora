@@ -5,13 +5,14 @@ import { MapContainer, TileLayer } from "react-leaflet";
 import "leaflet/dist/leaflet.css";
 import "leaflet-draw/dist/leaflet.draw.css";
 import DrawControl from "./DrawControl";
-import { fetchSatelliteStats } from "@/lib/api";
+import { fetchSatelliteStats, fetchSatelliteTile } from "@/lib/api";
 
 // Fix Leaflet icon issue in Next.js
 import L from "leaflet";
 
 const MapComponent = () => {
     const [mounted, setMounted] = useState(false);
+    const [tileUrl, setTileUrl] = useState<string | null>(null);
 
     useEffect(() => {
         // eslint-disable-next-line
@@ -42,12 +43,23 @@ const MapComponent = () => {
             console.log("Fetching satellite data...", geoJson.geometry);
 
             try {
-                const stats = await fetchSatelliteStats(
-                    geoJson.geometry,
-                    { start_date: "2023-01-01", end_date: "2023-06-01" } // Hardcoded for MVP
-                );
+                // Parallel fetch: Stats + Tile
+                const [stats, url] = await Promise.all([
+                    fetchSatelliteStats(
+                        geoJson.geometry,
+                        { start_date: "2023-01-01", end_date: "2023-06-01" } // Hardcoded for MVP
+                    ),
+                    fetchSatelliteTile(
+                        geoJson.geometry,
+                        { start_date: "2023-01-01", end_date: "2023-06-01" } // Hardcoded for MVP
+                    )
+                ]);
+
                 console.log("Satellite Stats:", stats);
-                alert(`NDVI Mean: ${stats.ndvi?.mean.toFixed(2)}\n(Check console for full details)`);
+                console.log("Tile URL:", url);
+
+                setTileUrl(url);
+                alert(`NDVI Mean: ${stats.ndvi?.mean.toFixed(2)}\nTile Layer added!`);
             } catch (err) {
                 console.error("Error fetching stats:", err);
                 alert("Failed to fetch satellite data. Check console.");
@@ -72,6 +84,13 @@ const MapComponent = () => {
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
                 url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
+            {tileUrl && (
+                <TileLayer
+                    url={tileUrl}
+                    opacity={0.7}
+                    zIndex={100}
+                />
+            )}
             <DrawControl onCreated={handleCreated} onDeleted={handleDeleted} />
         </MapContainer>
     );
