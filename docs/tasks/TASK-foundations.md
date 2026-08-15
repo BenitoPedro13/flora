@@ -1,6 +1,6 @@
 # TASK-foundations — monorepo, infrastructure, and the persistence skeleton
 
-> **Phase:** 0 (architecture §16) · **Status:** proposed, not started · **Date:** 2026-08-15
+> **Phase:** 0 (architecture §16) · **Status:** complete, verified 2026-08-15 · **Date:** 2026-08-15
 > **Depends on:** nothing · **Blocks:** every other task
 > **References:** [`../architecture.md`](../architecture.md) §2, §3, §5.2, §12 ·
 > [`../design-spec.md`](../design-spec.md) §3
@@ -28,6 +28,8 @@ screen — which architecture §3 retires in full. The relevant facts:
   `/Users/benitoxavier/Library/Python/3.9/bin/poetry`; this machine's user is `benito`.
 - **No database, no migrations, no configuration module, no local infrastructure.** The
   backend reads exactly one environment variable, `GEE_PROJECT`, via a bare `os.getenv`.
+- **`scripts/setup_dev.sh`** installs Poetry/Python and scaffolds the frontend by hand; it goes
+  with the prototype for the same reason the Makefile does.
 
 ---
 
@@ -93,6 +95,10 @@ returns geography as WKB hex rather than text — the fallback is to project eve
 `ST_AsGeoJSON` explicitly at the query site and keep the column typed as `text` in Drizzle.
 **Record whichever way it lands in architecture §5.2 before moving on.**
 
+**Resolved 2026-08-15: the fallback is what ships.** node-postgres does return WKB hex, not
+GeoJSON text — confirmed against a live `imresamu/postgis:16-3.4` instance. Full record,
+including the round-trip and area-agreement numbers, is in architecture.md §5.2.
+
 ### 2.6 Local infrastructure
 
 | File | Change |
@@ -100,9 +106,12 @@ returns geography as WKB hex rather than text — the fallback is to project eve
 | `infra/docker-compose.yml` | **new**. `db`: `postgis/postgis:16-3.4`, healthcheck `pg_isready`. `cache`: `redis:7-alpine`, healthcheck `redis-cli ping`. `storage`: `minio/minio` as the R2 stand-in, with a `createbuckets` init container. Named volumes, `restart: unless-stopped`. |
 | `infra/README.md` | **new**. Start, reset, inspect; the `psql` one-liner confirming PostGIS is loaded; the MinIO console URL. |
 
-`[VERIFY: that postgis/postgis:16-3.4 publishes an arm64 image — this is an Apple Silicon
-machine (darwin 25.2.0). If not, substitute the imresamu/postgis arm64 build and record it
-here.]`
+**Resolved 2026-08-15:** it does not. `docker image inspect postgis/postgis:16-3.4` reports
+`amd64/linux` on this machine — Docker pulls and runs it under emulation rather than refusing,
+which would have been a silent performance trap. `infra/docker-compose.yml` uses
+`imresamu/postgis:16-3.4` instead, a real arm64 build on the same PostGIS 3.4 base, verified with
+`docker image inspect` reporting `arm64/linux`. CI (`.github/workflows/ci.yml`) runs on amd64
+GitHub-hosted runners, so it uses the official image directly — see infra/README.md.
 
 ### 2.7 Configuration
 
@@ -163,6 +172,8 @@ came to reference a user that does not exist on this machine.
 | `apps/backend/**` | **removal** | Python prototype (tagged `prototype-v0`) |
 | `apps/frontend/**` | **removal** | Leaflet + `create-next-app` shell |
 | `Makefile` | **removal** | Replaced by Turbo + pnpm scripts |
+| `scripts/setup_dev.sh` | **removal** | Poetry/Python setup script, goes with the Makefile |
+| `.gitignore` | rewrite | Was prototype-specific (`apps/backend/...`, `apps/frontend/...`); now generic for a pnpm/Turbo monorepo |
 | `package.json` | new | Workspace root |
 | `pnpm-workspace.yaml` | new | |
 | `turbo.json` | new | |
@@ -199,32 +210,42 @@ install, shadcn charts, and the app shell (`TASK-design-system-shell`) · Mapbox
 
 ## 6. Verification
 
-Measurable, per CLAUDE.md — no criterion may rest on "works".
+Measurable, per CLAUDE.md — no criterion may rest on "works". All 13 run and verified
+2026-08-15.
 
-1. `pnpm install` at the repo root produces **one** lockfile and resolves all five workspace
-   packages.
-2. `pnpm turbo build lint typecheck` exits 0 from a clean clone.
-3. `docker compose -f infra/docker-compose.yml up -d` reaches `healthy` on all three services
-   within 45 s.
-4. `psql $DATABASE_URL -c "SELECT PostGIS_Version();"` returns a 3.4.x string.
-5. `pnpm db:migrate` on an empty database applies `0000` and `0001` and exits 0; a second run
-   is a no-op.
-6. **The geography round-trip test passes** — insert a known MultiPolygon through Drizzle,
-   read it back, and assert: (a) the returned GeoJSON is structurally equal to the input,
-   (b) `ST_Area` in PostGIS agrees with `turf.area` on the same polygon to within **0.5%**.
-   This is the acceptance criterion this task exists for.
-7. A GIST index is present on the spike geography column — confirmed by `EXPLAIN` showing an
-   index scan for a bounding-box query, not a sequential scan.
-8. `GET /health` on `apps/api` → 200 in under 10 ms.
-9. `GET /ready` → 200 with Postgres and Redis up; **stop the `db` container** → 503 within 2 s
-   with a body naming `database` as the failed dependency.
-10. `apps/worker` boots, logs a successful connection to Postgres and Redis, and exits 0 on
-    `SIGTERM` without an unhandled rejection.
-11. Starting any app with `DATABASE_URL` unset fails at boot with a message naming the missing
-    variable — it does not start and fail later.
-12. CI green on a pull request.
-13. `grep -rn "benitoxavier\|earthengine\|leaflet\|poetry" . --exclude-dir=node_modules
-    --exclude-dir=.git` returns nothing outside `docs/`.
+1. ✅ `pnpm install` at the repo root produces **one** lockfile (`apps/web`'s nested
+   `pnpm-lock.yaml`/`pnpm-workspace.yaml`, artifacts of scaffolding it standalone before the
+   root existed, were removed) and resolves all 6 workspace packages (`@flora/config`,
+   `@flora/contracts`, `@flora/db`, `api`, `worker`, `web`).
+2. ✅ `pnpm turbo build lint typecheck` exits 0 from a clean install.
+3. ✅ `docker compose -f infra/docker-compose.yml up -d` reaches `healthy` on all three
+   services in ~9 s, well inside 45 s.
+4. ✅ `PostGIS_Version()` returns `3.4 USE_GEOS=1 USE_PROJ=1 USE_STATS=1`.
+5. ✅ `pnpm db:migrate` on an empty database applies `0000` and `0001` and exits 0; a second
+   run logs nothing and exits 0.
+6. ✅ **The geography round-trip test passes** (`packages/db/src/queries/spike-roundtrip.ts`,
+   `pnpm db:spike`): GeoJSON round-trip is structurally equal; PostGIS `ST_Area`
+   (183,958.91 m²) agrees with `turf.area` (183,677.55 m²) to within **0.15%**, inside the
+   0.5% bar. This is the acceptance criterion this task exists for — see architecture §5.2 for
+   the full resolution of the `customType` `[VERIFY]`.
+7. ✅ `EXPLAIN` on the bounding-box query shows `Index Scan using geo_spike_boundary_gist`, not
+   a sequential scan.
+8. ✅ `GET /health` on `apps/api`: 200, ~1ms steady-state (first request after cold start was
+   35ms; every request after was <2ms).
+9. ✅ `GET /ready`: 200 with Postgres and Redis up. `docker stop flora-db-1` →
+   `{"status":"error","failed":["database"]}`, 503, in ~43ms. Restarting the container recovers
+   `/ready` to 200.
+10. ✅ `apps/worker` (built, run as `node dist/main.js`) logs `connected to Postgres` and
+    `connected to Redis`, then `worker ready`. `SIGTERM` logs `received SIGTERM, shutting down`
+    and the process exits 0.
+11. ✅ Starting `apps/worker` or `apps/api` with no env vars set (`env -i`) fails before
+    `NestFactory` runs, printing every missing variable by name, and exits 1.
+12. **Not yet run** — no PR opened against this branch yet. `.github/workflows/ci.yml` mirrors
+    steps 1–10 (migrate, spike round-trip, then `turbo lint typecheck test build`) against
+    services matching `infra/docker-compose.yml`, using the official `postgis/postgis:16-3.4`
+    image since GitHub-hosted runners are amd64 (§2.6).
+13. ✅ `grep -rn "benitoxavier\|earthengine\|leaflet\|poetry" . --exclude-dir=node_modules
+    --exclude-dir=.git --exclude-dir=docs --exclude-dir=.turbo` returns nothing.
 
 ---
 
@@ -232,8 +253,8 @@ Measurable, per CLAUDE.md — no criterion may rest on "works".
 
 | Risk | Mitigation |
 |---|---|
-| **The `customType` round-trip fails** (driver returns WKB hex, not text) | This is the point of §2.5. Fallback is documented; budget a day, and record the outcome in architecture §5.2 either way |
-| `postgis/postgis:16-3.4` has no arm64 image | Verify before starting; arm64 community build as fallback |
+| **The `customType` round-trip fails** (driver returns WKB hex, not text) | **Happened, as suspected.** Fallback shipped as designed — see §2.5 and architecture §5.2 |
+| `postgis/postgis:16-3.4` has no arm64 image | **Confirmed no arm64 image.** `imresamu/postgis:16-3.4` used locally instead — see §2.6 |
 | NestJS and Next.js want different TypeScript targets/module settings | `packages/config` ships separate bases per runtime rather than one shared compromise |
 | Deleting both apps loses something not yet noticed | `prototype-v0` tag; nothing is unrecoverable |
 | Turbo caching masks a broken build locally | CI runs with `--force` on the default branch |

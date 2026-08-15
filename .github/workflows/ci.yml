@@ -1,0 +1,70 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  DATABASE_URL: postgresql://flora:flora@localhost:5432/flora
+  REDIS_URL: redis://localhost:6379
+  S3_ENDPOINT: http://localhost:9000
+  S3_ACCESS_KEY_ID: flora
+  S3_SECRET_ACCESS_KEY: flora-dev-secret
+  S3_BUCKET: flora-rasters
+  NEXT_PUBLIC_MAPBOX_TOKEN: ci-placeholder-token
+  CDSE_CLIENT_ID: ci-placeholder
+  CDSE_CLIENT_SECRET: ci-placeholder
+  JWT_SIGNING_KEY: ci-placeholder-signing-key
+  WEB_ORIGIN: http://localhost:3000
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    # GitHub-hosted runners are amd64, so the official postgis/postgis image
+    # applies here — infra/docker-compose.yml uses an arm64 fallback only for
+    # local Apple Silicon development (architecture.md §5.2).
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: flora
+          POSTGRES_PASSWORD: flora
+          POSTGRES_DB: flora
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flora -d flora"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 20
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.21.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm db:migrate
+
+      - run: pnpm --filter @flora/db run spike:roundtrip
+
+      - run: pnpm turbo lint typecheck test build --force

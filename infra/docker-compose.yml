@@ -1,0 +1,71 @@
+name: flora
+
+services:
+  db:
+    # postgis/postgis:16-3.4 has no arm64 image (verified 2026-08-15 on this
+    # Apple Silicon machine — `docker image inspect` reports amd64/linux for
+    # it and would run under emulation). imresamu/postgis:16-3.4 is a real
+    # arm64 build with the same PostGIS 3.4 base. See architecture.md §5.2.
+    image: imresamu/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flora
+      POSTGRES_PASSWORD: flora
+      POSTGRES_DB: flora
+    ports:
+      - "5432:5432"
+    volumes:
+      - flora-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flora -d flora"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - flora-cache:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  storage:
+    image: minio/minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: flora
+      MINIO_ROOT_PASSWORD: flora-dev-secret
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - flora-storage:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+
+  createbuckets:
+    image: minio/mc
+    depends_on:
+      storage:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://storage:9000 flora flora-dev-secret &&
+      mc mb -p local/flora-rasters &&
+      exit 0
+      "
+
+volumes:
+  flora-db:
+  flora-cache:
+  flora-storage:

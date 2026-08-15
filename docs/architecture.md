@@ -231,10 +231,23 @@ Every PostGIS *function* — `ST_Area`, `ST_Contains`, `ST_Centroid`, `ST_GeomFr
 This is a feature, not a workaround: spatial SQL is where the real logic lives and it stays
 readable, in one place, and reviewable.
 
-`[VERIFY: the exact customType round-trip against a live PostGIS 3.4 instance before building
-on it — specifically whether the driver returns geography as WKB hex rather than text, in
-which case fromDriver must decode differently or every select must project through
-ST_AsGeoJSON explicitly.]`
+**Resolved 2026-08-15**, against a live `imresamu/postgis:16-3.4` instance
+(`packages/db/src/queries/spike-roundtrip.ts`, TASK-foundations §2.5): node-postgres returns
+`geography` columns as **WKB hex** (e.g. `0106000020E6...`), not GeoJSON text — confirmed by
+selecting a `geography(MultiPolygon,4326)` column directly and observing the raw driver value.
+`JSON.parse`-ing that throws, so the `customType` above is not what ships.
+
+**What actually ships:** the fallback this section already named. `geographyMultiPolygon` (and
+`geographyPolygon`, `geographyPoint`) in `packages/db/src/types/geography.ts` declare `data` as
+`string` — the raw WKB hex — precisely so nothing treats a direct select as parsed GeoJSON. They
+exist only to give `drizzle-kit generate` the correct column DDL. Every actual read and write
+goes through `packages/db/src/queries/spatial.ts`, wrapping `ST_GeomFromGeoJSON` on insert and
+projecting every select through `ST_AsGeoJSON(...)::json`.
+
+The spike test proved the full chain on a known `MultiPolygon`: insert → read back is
+structurally equal GeoJSON, and PostGIS `ST_Area` agrees with `turf.area` on the same polygon to
+within 0.15% (well inside the 0.5% acceptance bar). A GIST bounding-box query on the spike table
+confirmed an index scan via `EXPLAIN`, not a sequential scan.
 
 ### 5.3 Table notes
 

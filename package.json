@@ -1,0 +1,37 @@
+{
+  "name": "flora",
+  "private": true,
+  "packageManager": "pnpm@11.21.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write . --config packages/config/src/prettier.js --ignore-path .gitignore",
+
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "infra:reset": "docker compose -f infra/docker-compose.yml down -v && pnpm run infra:up",
+    "infra:logs": "docker compose -f infra/docker-compose.yml logs -f",
+    "infra:wait": "until [ \"$(docker inspect -f '{{.State.Health.Status}}' flora-db-1 2>/dev/null)\" = healthy ]; do sleep 1; done",
+    "infra:psql": "docker exec -it flora-db-1 psql -U flora -d flora",
+    "infra:redis-cli": "docker exec -it flora-cache-1 redis-cli",
+
+    "db:generate": "pnpm --filter @flora/db run generate",
+    "db:migrate": "pnpm --filter @flora/db run migrate",
+    "db:studio": "pnpm --filter @flora/db run studio",
+    "db:spike": "pnpm --filter @flora/db run spike:roundtrip",
+
+    "setup": "pnpm install && pnpm run infra:up && pnpm run infra:wait && pnpm run db:migrate"
+  },
+  "devDependencies": {
+    "dotenv-cli": "11.0.0",
+    "prettier": "3.9.6",
+    "turbo": "2.10.10",
+    "typescript": "5.9.3"
+  }
+}
