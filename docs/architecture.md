@@ -532,8 +532,11 @@ export const fieldSchema = z.object({
 export type Field = z.infer<typeof fieldSchema>
 ```
 
-`[VERIFY: current zod major version and the matching NestJS integration — nestjs-zod vs a
-hand-written pipe. Check both projects' docs rather than assuming the API shape above.]`
+**Resolved 2026-08-15 (`TASK-auth-tenancy`):** zod is **4.4.3**; **`nestjs-zod` 5.5.0** declares
+`zod: "^3.25.0 || ^4.0.0"` as a peer, so it is used directly — `createZodDto()` for request
+DTOs, a global `ZodValidationPipe`, and `ZodValidationException` mapped to `application/
+problem+json` by the exception filter (`apps/api/src/common/problem.filter.ts`). No hand-written
+pipe.
 
 ### 8.3 Endpoints
 
@@ -664,18 +667,38 @@ pills in the design are a symbol layer with a text halo.
 
 ## 10. Authentication and tenancy
 
-NestJS owns `users`, `organizations` and `memberships`. Access token 15 min, refresh token 30
-days and rotating, stored hashed; both in `HttpOnly`, `Secure`, `SameSite=Lax` cookies.
-Passwords hashed with **argon2id**.
+**Implemented in `TASK-auth-tenancy` (2026-08-15).** NestJS owns `users`, `organizations` and
+`memberships` — no RLS on `users`/`refresh_tokens` (identity, not tenant data; every access is
+keyed by a user id from a verified token, never a request parameter). Access token 15 min
+(JWT, HS256), refresh token 30 days and rotating, stored as a SHA-256 hash (not argon2 — a
+256-bit random string has nothing to brute-force); both in `HttpOnly`, `Secure`,
+`SameSite=Lax` cookies, the refresh cookie additionally scoped to `Path=/api/v1/auth/refresh`.
+Passwords hashed with **argon2id** (`@node-rs/argon2`, prebuilt binaries — no node-gyp
+toolchain needed). An unknown email still runs a real argon2id verify against a fixed dummy
+hash, so response time can't be used to enumerate accounts.
+
+**Refresh rotation with reuse detection.** Every refresh token carries a `family_id`. Reusing
+an already-rotated token — the signature of a stolen token being replayed — revokes every
+token in that family, ending every session descended from the theft.
 
 Roles on `memberships`: `owner | manager | operator | viewer`. An `operator` can move tasks
-and classify stress zones but cannot edit field boundaries or invite users.
+and classify stress zones but cannot edit field boundaries or invite users. `RolesGuard`
+shipped with `TASK-auth-tenancy`, exercised only against a fixture controller — no
+role-gated resource exists yet; the real gates land with `TASK-fields` and `TASK-tasks-board`.
 
 **Tenancy is enforced twice** — a repository-layer filter *and* Postgres RLS as the backstop.
-One missed `where` clause must not become a cross-tenant leak.
-
-`[VERIFY: whether social login is required. If so, revisit — an external IdP weakens the
-argument for backend-owned identity considerably.]`
+One missed `where` clause must not become a cross-tenant leak. Mechanically: every request
+carrying an access token runs inside a transaction with a Postgres GUC
+(`app.current_organization_id`) set to the token's `org` claim
+(`packages/db/src/tenancy.ts#withOrganization`); every tenant table's RLS policy is
+`organization_id = app_current_org()`, which returns zero rows — not all rows — when the GUC
+is unset, so a forgotten `withOrganization` fails closed. `apps/api` connects to Postgres as a
+second role, `flora_app`, which cannot bypass RLS (`NOBYPASSRLS`, owns nothing); the owner role
+(`flora`) is used only by migrations, seeds, and Drizzle Studio. Cross-tenant reads return
+**404, not 403** — a 403 confirms the resource exists, which across a tenant boundary is itself
+the leak. One narrow, audited exception: login reads a user's memberships via a
+`SECURITY DEFINER` Postgres function (`auth_memberships_for_user`), because no org context
+exists yet at that point — the system asserts exactly one such function exists.
 
 ---
 
@@ -805,7 +828,9 @@ The prototype's tests asserted on values they fed their own mocks. The rule that
 | Redis | Managed (Upstash or provider-native) |
 | Object storage | Cloudflare R2, public-read bucket behind the CDN |
 | Migrations | drizzle-kit, run as a release step, never on app boot |
-| Secrets | `CDSE_CLIENT_ID/SECRET`, `MAPBOX_TOKEN`, `DATABASE_URL`, `REDIS_URL`, `R2_*`, `JWT_SIGNING_KEY` |
+| Secrets | `CDSE_CLIENT_ID/SECRET`, `MAPBOX_TOKEN`, `DATABASE_URL` (the `flora_app` role, §10), `DATABASE_MIGRATION_URL` (the owner role — release step / one-off tooling only, never a running app), `REDIS_URL`, `R2_*`, `JWT_SIGNING_KEY` (≥32 bytes) |
+| Cookies / same-origin | **Resolved 2026-08-15 (`TASK-auth-tenancy`).** `apps/web` (Vercel) and `apps/api` (Railway/Fly) are different registrable domains, so `SameSite=Lax` cookies are never sent cross-site — invisible on `localhost` (`:3000`→`:3001` is same-site) but real in any deployed topology. `apps/web`'s `next.config.ts` `rewrites()` proxies `/api/v1/*` to `API_URL` (server-side only, never `NEXT_PUBLIC_`), so the browser only ever sees `apps/web`'s origin and cookies stay same-site everywhere. Rejected: `SameSite=None; Secure` + a CORS allowlist + CSRF tokens — materially more surface for the same outcome. |
+| RLS boot assertion | `apps/api` and `apps/worker` assert at startup that `DATABASE_URL` is not the owner role (`SELECT rolsuper, rolbypassrls FROM pg_roles WHERE rolname = current_user` must be `false, false`) and exit 1, naming the role, if it is — swapping `DATABASE_URL`/`DATABASE_MIGRATION_URL` silently disables RLS with no other symptom (§10). |
 | Observability | Structured JSON logs, Sentry on all three, `/health` (liveness) + `/ready` (Postgres + Redis reachable) |
 
 Every environment variable the code reads is listed in `.env.example`.
@@ -869,6 +894,7 @@ computes yet (§17 Q4).
 | ~~Q6~~ | ~~Social login~~ — **RESOLVED 2026-08-15: no.** Email + password (argon2id), backend-owned identity (§10). Farm staff frequently have no work-linked Google account, and an external IdP would split identity from the tenancy model that lives in Postgres. Revisit only if an org asks for SSO. | — |
 | ~~Q7~~ | ~~Mobile~~ — **RESOLVED 2026-08-15: desktop-only in v1, built to retrofit cheaply.** See §9.6. | — |
 | Q8 | Who computes nitrogen prescriptions (§4.1) | Phase 6 |
+| Q9 | What sends transactional email? Password reset and invitations both need a provider; neither is in scope for `TASK-auth-tenancy` (§10) and none has been chosen. | First task needing either |
 | — | ~~What produces energy readings~~ — moot while Energy is deferred (§4.3) | deferred |
 
 ---

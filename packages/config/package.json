@@ -10,9 +10,10 @@
     "./tsconfig/library.json": "./tsconfig/library.json",
     "./eslint": "./src/eslint.js",
     "./prettier": "./src/prettier.js",
-    "./env": "./src/env.ts"
+    "./env": "./dist/env.js"
   },
   "scripts": {
+    "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

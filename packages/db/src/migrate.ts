@@ -13,9 +13,12 @@ const migrationsDir = join(dirname(fileURLToPath(import.meta.url)), "..", "migra
  * SQL, reviewed by hand per CLAUDE.md §2.1, not generated.
  */
 async function main() {
-  const databaseUrl = process.env.DATABASE_URL;
+  // The owner connection: migrations create the flora_app role, grant to it,
+  // and define SECURITY DEFINER functions — none of which DATABASE_URL (the
+  // non-bypass-RLS app connection, TASK-auth-tenancy §2.1.4) is permitted to do.
+  const databaseUrl = process.env.DATABASE_MIGRATION_URL;
   if (!databaseUrl) {
-    throw new Error("DATABASE_URL is not set");
+    throw new Error("DATABASE_MIGRATION_URL is not set");
   }
 
   const client = new Client({ connectionString: databaseUrl });

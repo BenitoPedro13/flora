@@ -3,12 +3,13 @@
 An operations console for a regenerative farm — fields, crops, satellite-derived crop health,
 tasks, and weather.
 
-**Status:** Phase 0 foundations landed (`docs/tasks/TASK-foundations.md`) — pnpm/Turborepo
-monorepo, Docker infra, and a proven Drizzle+PostGIS skeleton. No screens yet.
-`TASK-auth-tenancy` and `TASK-design-system-shell` are next, followed by the build spine
-(Fields & Crops → Crop Stress → Tasks). See `docs/architecture.md` (system, v2) and
-`docs/design-spec.md` (visual) for the full picture — `CLAUDE.md` for how work happens in this
-repo.
+**Status:** Phase 0 foundations (`docs/tasks/TASK-foundations.md`) and identity/tenancy
+(`docs/tasks/TASK-auth-tenancy.md`) have landed — pnpm/Turborepo monorepo, Docker infra, a
+proven Drizzle+PostGIS skeleton, email+password login with cookie sessions, and row-level
+security enforced twice (repository filter + Postgres RLS) for every tenant table.
+`TASK-design-system-shell` is next, followed by the build spine (Fields & Crops → Crop Stress
+→ Tasks). See `docs/architecture.md` (system, v2) and `docs/design-spec.md` (visual) for the
+full picture — `CLAUDE.md` for how work happens in this repo.
 
 ## Stack
 
@@ -23,11 +24,18 @@ Prerequisites: Node 24+, pnpm, Docker.
 ```bash
 cp .env.example .env   # fill in placeholders; see infra/README.md for the local ones
 pnpm setup              # install deps, start infra, run migrations
-pnpm dev                 # apps/web on :3000, apps/api on :3000 (nest), apps/worker standalone
+pnpm db:seed             # first organization + owner login (owner@flora.local)
+pnpm dev                 # apps/web on :3000, apps/api on :3001, apps/worker standalone
 ```
 
 `pnpm setup` is `pnpm install && pnpm infra:up && pnpm infra:wait && pnpm db:migrate` — run the
-steps individually if you want to see each one.
+steps individually if you want to see each one. `pnpm dev` builds `packages/*` first (Turbo's
+`dev` task depends on `^build`): `apps/api`/`apps/worker` run through NestJS's own compiler
+(needed for `emitDecoratorMetadata`, which esbuild-based tools like `tsx` don't implement), so
+`packages/config`/`db`/`contracts` must exist as compiled JS, not raw TypeScript, for `nest
+start` to resolve them.
+
+Log in at `localhost:3000/login` with the seeded credentials `pnpm db:seed` printed.
 
 ## Commands
 
@@ -43,6 +51,7 @@ steps individually if you want to see each one.
 | `pnpm db:generate` | `drizzle-kit generate` — always review the output before committing |
 | `pnpm db:studio` | Drizzle Studio against the local database |
 | `pnpm db:spike` | Re-run the PostGIS round-trip proof (architecture.md §5.2) |
+| `pnpm db:seed` | Create the first organization + owner login, if one doesn't exist yet |
 
 More detail on the infra stack, including why the local `db` image differs from CI's, is in
 `infra/README.md`.

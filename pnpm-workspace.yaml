@@ -3,10 +3,18 @@ packages:
   - "packages/*"
 
 allowBuilds:
+  '@swc/core': true
+  cpu-features: true
   esbuild: true
+  protobufjs: true
+  ssh2: true
   unrs-resolver: true
 
 onlyBuiltDependencies:
+  - "@swc/core"
+  - cpu-features
   - esbuild
+  - protobufjs
   - sharp
+  - ssh2
   - unrs-resolver

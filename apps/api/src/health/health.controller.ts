@@ -6,12 +6,14 @@ import {
   ServiceUnavailableException,
 } from '@nestjs/common';
 import type { Health } from '@flora/contracts';
+import { Public } from '../auth/public.decorator.js';
 import { HealthService } from './health.service.js';
 
 @Controller()
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
+  @Public()
   @Get('health')
   @HttpCode(HttpStatus.OK)
   getHealth(): Health {
@@ -22,6 +24,7 @@ export class HealthController {
     };
   }
 
+  @Public()
   @Get('ready')
   async getReadiness() {
     const result = await this.healthService.checkReadiness();

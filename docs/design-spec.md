@@ -593,6 +593,7 @@ not extractions:
 | D12 | **The sidebar at four entries** has more bottom whitespace than designed. Confirm whether the nav block stays top-aligned or the Settings/Support group moves up. |
 | D9 | `fancy/primary/default` still blue in Figma (§2.3). |
 | D10 | "Rain Chanse" typo (§5.6); "Pendent Tasks" should be "Pending Tasks"; "Specie Planted" should be "Species Planted"; "Energy Fonts" is likely a mistranslation of "Energy Sources" (*fontes*, PT). |
+| D13 | **No auth screens exist.** Login, forgot-password, and invite-acceptance are all undesigned — the screen inventory (§2) has none. `TASK-auth-tenancy` shipped a functional, unstyled login page (Tailwind only, no AlignUI) to prove the cookie flow; it gets restyled once these are designed. |
 
 ---
 

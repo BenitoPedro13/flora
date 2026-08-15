@@ -22,9 +22,12 @@ Field Management follow. **Energy (`3:5920`) and Carbon Offset (`3:6566`) are de
 Energy sits off that loop and has no data source (architecture §4.3). Do not build against
 either without re-opening the decision.
 
-**Status (2026-08-15):** specification complete, **no code written against it yet**. The repo
-still holds the retired prototype (HEAD `e2d0f5e`) — Python/FastAPI, Google Earth Engine,
-Leaflet. `TASK-foundations` deletes it after tagging `prototype-v0`.
+**Status (2026-08-15):** `TASK-foundations` (monorepo, infra, Drizzle+PostGIS skeleton) and
+`TASK-auth-tenancy` (identity, sessions, RLS enforced twice) have both landed. Email+password
+login with cookie sessions works end to end in a real browser; every tenant table is protected
+by the catalog test in `packages/db/src/queries/tenancy.spec.ts`. Next:
+`TASK-design-system-shell`, then the build spine. The retired prototype was deleted by
+`TASK-foundations` after tagging `prototype-v0`.
 
 **Decided 2026-08-15:** no AlignUI PRO seat. The five PRO blocks in the Figma
 (`Sidebar [Navigation]`, `Page Header`, `Widgets [HR Management]`, `Schedule Cards`,
@@ -32,8 +35,10 @@ Leaflet. `TASK-foundations` deletes it after tagging `prototype-v0`.
 design-spec §6.2 has the mapping. `AppSidebar` and `PageHeader` carry the real work and are
 first-class deliverables of `TASK-design-system-shell`, not afterthoughts.
 
-Next up: `docs/tasks/TASK-foundations.md` — monorepo, Docker infra, and the Drizzle+PostGIS
-skeleton. Nothing else starts before it lands.
+Next up: `docs/tasks/TASK-design-system-shell.md` — AlignUI CLI, shadcn chart, `AppSidebar` and
+`PageHeader` rebuilt from free base components. Parallel with it (no file overlap except
+`.env.example`): `TASK-domain-schema`, which is blocked on `TASK-auth-tenancy`'s
+`packages/db/src/tenancy.ts` — every one of its tenant tables must go through it.
 
 ### Why the stack changed
 
