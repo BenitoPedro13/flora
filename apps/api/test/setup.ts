@@ -2,9 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { startTestInfra } from '@flora/db/test/containers';
-import { createDbClient, memberships, organizations, users } from '@flora/db';
+import {
+  createDbClient,
+  insertStressZone,
+  memberships,
+  organizations,
+  upsertObservation,
+  users,
+  withOrganization,
+} from '@flora/db';
 import type { Database } from '@flora/db';
-import type { Role } from '@flora/contracts';
+import type { ObservationIndex, Role } from '@flora/contracts';
 import { hash } from '@node-rs/argon2';
 import { sql } from 'drizzle-orm';
 import { AppModule } from '../src/app.module.js';
@@ -35,6 +43,7 @@ async function boot(): Promise<INestApplication> {
   process.env.WEB_ORIGIN ??= 'http://localhost:3000';
   process.env.ACCESS_TOKEN_TTL_SECONDS ??= '900';
   process.env.REFRESH_TOKEN_TTL_SECONDS ??= '2592000';
+  process.env.R2_PUBLIC_BASE_URL ??= 'http://localhost:9000/flora-rasters';
 
   const moduleRef = await Test.createTestingModule({
     imports: [AppModule],
@@ -132,4 +141,61 @@ export async function seedFarmAndCrop(
     RETURNING id
   `);
   return { farmId: farmRows.rows[0].id, cropId: cropRows.rows[0].id };
+}
+
+/**
+ * Directly through the owner connection, like `seedFarmAndCrop` — no HTTP
+ * endpoint writes an observation (only the worker does), so the observations
+ * e2e/tenancy suites seed one this way to have something to read.
+ */
+export async function seedObservation(
+  organizationId: string,
+  fieldId: string,
+  index: ObservationIndex = 'ndvi',
+  capturedOn = '2026-08-01',
+): Promise<void> {
+  const db = await getOwnerDb();
+  await withOrganization(db, organizationId, async (tx) => {
+    await upsertObservation(tx, {
+      organizationId,
+      fieldId,
+      capturedOn,
+      index,
+      stats: { min: 0.1, max: 0.9, mean: 0.5, stddev: 0.1, p10: 0.3, p90: 0.7 },
+      rasterKey: `rasters/${organizationId}/${fieldId}/${index}/${capturedOn}.png`,
+      bbox: [-93.62, 42.03, -93.615, 42.034],
+      sceneId: `test-scene-${capturedOn}`,
+    });
+  });
+}
+
+/** Same reasoning as `seedObservation` — no HTTP endpoint writes a stress zone. Returns the new zone's id. */
+export async function seedStressZone(
+  organizationId: string,
+  fieldId: string,
+): Promise<string> {
+  const db = await getOwnerDb();
+  return withOrganization(db, organizationId, (tx) =>
+    insertStressZone(tx, {
+      organizationId,
+      fieldId,
+      geometry: {
+        type: 'Polygon',
+        coordinates: [
+          [
+            [-93.618, 42.031],
+            [-93.617, 42.031],
+            [-93.617, 42.032],
+            [-93.618, 42.032],
+            [-93.618, 42.031],
+          ],
+        ],
+      },
+      detectedOn: '2026-08-01',
+      windowStart: '2026-07-01',
+      windowEnd: '2026-08-01',
+      severity: 'high',
+      indexValue: 0.2,
+    }),
+  );
 }

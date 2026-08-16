@@ -3,18 +3,24 @@
 An operations console for a regenerative farm — fields, crops, satellite-derived crop health,
 tasks, and weather.
 
-**Status:** Phase 0 is complete and Phase 1's first screen is live. Foundations
+**Status:** Phase 0 and Phase 1 are complete, and Phase 2's write path is live. Foundations
 (`docs/tasks/TASK-foundations.md`), identity/tenancy (`docs/tasks/TASK-auth-tenancy.md`), the
 design-system shell (`docs/tasks/TASK-design-system-shell.md`), the domain schema
-(`docs/tasks/TASK-domain-schema.md`), and Fields & Crops (`docs/tasks/TASK-fields.md`) have all
-landed: pnpm/Turborepo monorepo, Docker infra, the ten domain tables (farms, crops, fields,
-crop_cycles, observations, stress_zones, tasks + its three children) with composite foreign keys
-and RLS, email+password login with cookie sessions, row-level security enforced twice
-(repository filter + Postgres RLS) for every tenant table, the AlignUI token chain +
-`AppSidebar`/`PageHeader` shell every screen renders into, and `/fields` — field CRUD, Mapbox
-boundary drawing, crop cycles, cursor-paginated search/sort/filter, and GeoJSON import
-(preview-then-commit). `/` still renders the session sentence. Next: Crop Stress
-(`TASK-crop-stress`) → Tasks (`TASK-tasks-board`). See `docs/architecture.md` (system, v2) and
+(`docs/tasks/TASK-domain-schema.md`), Fields & Crops (`docs/tasks/TASK-fields.md`), and the
+satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`) have all landed:
+pnpm/Turborepo monorepo, Docker infra, the ten domain tables (farms, crops, fields, crop_cycles,
+observations, stress_zones, tasks + its three children) with composite foreign keys and RLS,
+email+password login with cookie sessions, row-level security enforced twice (repository filter
++ Postgres RLS) for every tenant table, the AlignUI token chain + `AppSidebar`/`PageHeader` shell
+every screen renders into, `/fields` — field CRUD, Mapbox boundary drawing, crop cycles,
+cursor-paginated search/sort/filter, and GeoJSON import (preview-then-commit) — and now
+`packages/satellite` (the CDSE HTTP client) + `packages/raster` (decode → stats → PNG →
+detection) + `apps/worker`'s BullMQ queue and scheduler + six new `apps/api` endpoints, all with
+no UI yet: real observations and stress zones exist, `db:seed:satellite` replays a synthetic
+fixture through the real pipeline for offline development. `/` still renders the session
+sentence. Next: the Crop Stress screen (`TASK-crop-stress`, `18:6567`) reads what this pipeline
+writes, then Tasks (`TASK-tasks-board`).
+See `docs/architecture.md` (system, v2) and
 `docs/design-spec.md` (visual) for the full picture — `CLAUDE.md` for how work happens in this
 repo.
 
@@ -33,6 +39,7 @@ cp .env.example .env   # fill in placeholders; see infra/README.md for the local
 pnpm setup              # install deps, start infra, run migrations
 pnpm db:seed             # first organization + owner login (owner@flora.local), one farm, four crops
 pnpm db:seed:demo        # four demo fields matched to the Fields screen's Figma cards — optional
+pnpm db:seed:satellite   # observations + stress zones for the demo fields, via the real pipeline — optional, run after db:seed:demo
 pnpm dev                 # apps/web on :3000, apps/api on :3001, apps/worker standalone
 ```
 
@@ -60,6 +67,7 @@ Log in at `localhost:3000/login` with the seeded credentials `pnpm db:seed` prin
 | `pnpm db:studio` | Drizzle Studio against the local database |
 | `pnpm db:seed` | Create the first organization, owner login, farm, and crops, if they don't exist yet |
 | `pnpm db:seed:demo` | Add four demo fields matched to the Fields screen's Figma cards — run after `db:seed` |
+| `pnpm db:seed:satellite` | Replay a synthetic-but-known raster through the real pipeline into `observations`/`stress_zones` for the demo fields — run after `db:seed:demo`; needs no CDSE credentials |
 | `pnpm db:seed:bulk` | Add 200 more fields on a grid (pagination and NFR-11 fixtures) — run after `db:seed` |
 | `pnpm --filter web test:e2e` | Playwright e2e tests (`apps/web/e2e/`) — needs `apps/api` + infra running and `pnpm db:seed && pnpm db:seed:demo`; run `pnpm --filter web exec playwright install chromium` once first |
 

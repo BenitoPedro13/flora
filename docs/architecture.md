@@ -417,15 +417,15 @@ screen must render in under a second. These reconcile only by never doing both a
 ### 7.2 Write path — scheduled
 
 ```
-BullMQ repeatable job, daily 03:00 farm-local
-  └─ for each field with an active crop_cycle
-       └─ satellite.refresh(fieldId, index)          [queue: satellite, concurrency 2]
+One BullMQ Job Scheduler per field, daily 03:00 in that field's farm's timezone
+  └─ satellite.refresh(organizationId, fieldId)      [queue: satellite, concurrency 2]
 
            1. Catalog API — find the latest scene intersecting the field bbox
               with cloudCover < 20%. Skip if we already hold an observation
               for (field, sceneDate, index).
-           2. Process API — ONE request, output float32 GeoTIFF, evalscript
-              computing the index, clipped to the field boundary.
+           2. Process API — ONE request, two named outputs (index + SCL) as
+              float32/uint8 GeoTIFFs, evalscript computing the index, clipped
+              to the field boundary.
            3. In-worker: decode with geotiff.js →
                 a. compute stats (min/max/mean/stddev/p10/p90)
                 b. apply the colour ramp → PNG via sharp → upload to R2
@@ -433,6 +433,13 @@ BullMQ repeatable job, daily 03:00 farm-local
            4. Upsert `observations`; upsert `stress_zones` (preserving operator
               classifications and mutes on zones that still overlap).
 ```
+
+**Implemented as one Job Scheduler per field, not literally "one repeatable job per farm"**
+(`TASK-satellite-pipeline` §10): a BullMQ Job Scheduler carries exactly one fixed job template,
+so per-field job data needs a per-field scheduler id. Every field of a farm shares that farm's
+timezone, so this still delivers one wave of jobs per farm each night — see
+`apps/worker/src/satellite/scheduler.service.ts`. The scheduler's own field enumeration is the
+one query in the system that runs with no tenant context at all — see §10 below.
 
 **One request, three artefacts.** Requesting a float32 GeoTIFF rather than a display PNG means
 the same call yields the statistics, the display raster, and the stress geometry. Using the
@@ -449,7 +456,10 @@ returns numbers only, so 12 months of monthly means costs roughly one request in
 twelve rasters. Low priority on the `satellite` queue.
 `[VERIFY: the Statistical API's aggregation interval parameters and whether a 12-month monthly
 aggregation is genuinely one request or one per interval — this materially changes quota
-sizing.]`
+sizing.]` **Deferred to Phase 4 (`TASK-satellite-pipeline` §7 decision 5, 2026-08-16):** this
+`[VERIFY]` is exactly the kind of open quota question that shouldn't be sized against a guess.
+`TASK-satellite-pipeline` ships the daily NDVI write path and the read path only; backfill
+lands with `TASK-home`, which is also the first task that has anything to read it.
 
 **Failure** — BullMQ `attempts: 5`, exponential backoff with jitter. On exhaustion the field
 records `last_refresh_error` and the UI shows a stale badge with the last-success date, never
@@ -478,8 +488,11 @@ to the browser.
 
 Decided 2026-08-15. The design shows "8 stress detected · 24.1 ac" and per-zone areas of
 1.9–4.5 ac, but states no rule. These are the rules; they live in
-`apps/worker/src/satellite/detect.ts` behind a named, versioned function so a change is
-visible in review rather than buried in a constant.
+`packages/raster/src/detect.ts` (moved there from the originally-planned
+`apps/worker/src/satellite/detect.ts` by `TASK-satellite-pipeline` §2.11's deviation — see
+that task's §10 — so `packages/db`'s satellite seed can call the exact same function the worker
+does) behind a named, versioned function so a change is visible in review rather than buried in
+a constant.
 
 **Thresholds are relative, never absolute.** NDVI has no universal "stressed" value — corn at
 V6 and corn at tasseling have completely different healthy baselines, and so do corn and soy
@@ -513,9 +526,10 @@ one by **≥ 50% of the smaller area** is treated as the same zone: its geometry
 update, but its operator-set `classification` and `muted_at` are kept. Otherwise every refresh
 would silently discard a farmer's triage.
 
-`[VERIFY: the design's detection popover reads "4.5 ac", which exceeds the 4 ac cap agreed
-above. Either the cap splits it into two zones, or the popover is illustrative. Confirm —
-this is cosmetic, not blocking.]`
+**Resolved 2026-08-16 (`TASK-satellite-pipeline` §2.12):** the design's detection popover reads
+"4.5 ac", which exceeds the 4 ac cap agreed above. The popover figure is illustrative — every
+zone the detector actually produces is capped at 4 ac by the split rule (design-spec §5.3's
+note on this).
 
 ### 7.6 Aggregation for Home
 
@@ -740,9 +754,14 @@ is unset, so a forgotten `withOrganization` fails closed. `apps/api` connects to
 second role, `flora_app`, which cannot bypass RLS (`NOBYPASSRLS`, owns nothing); the owner role
 (`flora`) is used only by migrations, seeds, and Drizzle Studio. Cross-tenant reads return
 **404, not 403** — a 403 confirms the resource exists, which across a tenant boundary is itself
-the leak. One narrow, audited exception: login reads a user's memberships via a
-`SECURITY DEFINER` Postgres function (`auth_memberships_for_user`), because no org context
-exists yet at that point — the system asserts exactly one such function exists.
+the leak. Two narrow, audited exceptions run with no org context, both `SECURITY DEFINER`
+Postgres functions returning the minimum needed and nothing else: login reads a user's
+memberships (`auth_memberships_for_user`, `TASK-auth-tenancy`), and the satellite worker's
+scheduler asks "which fields, across every org, are due for a refresh" before any request
+exists to carry an org claim (`scheduler_fields_due_for_refresh`, `TASK-satellite-pipeline`
+§2.4 — the alternative was a `BYPASSRLS` worker role or an unprotected work-queue table, both a
+larger surface). The system asserts exactly these two functions exist — a named allowlist, not
+a bare count, so a *third* one still fails the assertion.
 
 ---
 
@@ -757,9 +776,26 @@ no rollover.
 At 50 fields refreshed daily on one index that is ~1,500 requests/month — comfortable. The
 binding limits are **concurrency 2** (handled by pinning the satellite queue's concurrency,
 §6.3) and possibly **processing units rather than request count**.
-`[VERIFY: the Processing Unit formula — PU is derived from output size and band count, so a
-full-resolution GeoTIFF costs more than one unit. Size the refresh job against PU, not
-requests.]`
+
+**PU formula resolved 2026-08-16 (`TASK-satellite-pipeline` §2.2), from CDSE's own Processing
+Unit documentation:**
+
+```
+PU = 1 (base @ 512x512px, 3 bands, <=16-bit)
+     x (output_px / 262144, minimum 0.01)
+     x (input_bands / 3)
+     x format_factor        (8/16-bit = 1, float32 TIFF = 2x, octet-stream = 1.4x)
+     x samples_per_pixel
+```
+
+At the worker's `RASTER_WIDTH_PX`/`RASTER_HEIGHT_PX` default (512x512, unchanged from the
+formula's own baseline resolution) with 6 input bands (B02/B03/B04/B05/B08/SCL) and the 2x
+float32 penalty, one refresh costs meaningfully more than 1 PU — the exact multiple depends on
+how CDSE counts the two-output multipart response, which this task could not measure against a
+live account (no CDSE credentials in this environment — `TASK-satellite-pipeline` §10). **The
+actual measured PU cost of one refresh, and the resulting 200-field/30-day projection against
+the 10,000 PU/month tier, is still open** — the first task with real CDSE credentials should
+run one live refresh, read the number off CDSE's usage dashboard, and fill this in.
 
 Copernicus Sentinel *data* is free for commercial use, but CDSE states the portal's other
 contents are intended for non-commercial use, with commercial scale directed to Sentinel Hub
@@ -767,7 +803,15 @@ on CREODIAS. For a portfolio project this is fine; commercialising means a paid 
 against the same API.
 
 The provider sits behind a `SatelliteProvider` interface in `packages/satellite` — the one
-idea carried over from the prototype (§3).
+idea carried over from the prototype (§3). `packages/satellite` is CDSE HTTP conversation only
+(OAuth2 token caching, Catalog search, one Process API call per refresh); the raster decode,
+statistics, colour ramp and detection pipeline that consumes its output lives in
+`packages/raster`, a sibling package, so both `apps/worker` and `packages/db`'s satellite seed
+can run it without either depending on the other (`TASK-satellite-pipeline` §10). CDSE's token
+host (`identity.dataspace.copernicus.eu`), Catalog host (`sh.dataspace.copernicus.eu/catalog/v1`)
+and Process endpoint (`sh.dataspace.copernicus.eu/api/v1/process`) were confirmed against CDSE's
+own current docs by that task, distinct from the pre-CDSE `services.sentinel-hub.com` host an
+older guide would suggest.
 
 ### 11.2 Mapbox
 
@@ -831,7 +875,8 @@ flora/
 ├─ packages/
 │  ├─ contracts/          zod schemas + inferred types (the API contract)
 │  ├─ db/                 Drizzle schema, client, migrations, spatial queries
-│  ├─ satellite/          Sentinel Hub client behind SatelliteProvider
+│  ├─ satellite/          CDSE HTTP client behind SatelliteProvider — token, catalog, process
+│  ├─ raster/             GeoTIFF decode, stats, colour ramp, vectorise, detect (§7.5), S3 put
 │  └─ config/             shared tsconfig, eslint, tailwind presets
 ├─ infra/
 │  └─ docker-compose.yml  postgis/postgis:16-3.4 · redis:7 · minio
@@ -862,8 +907,8 @@ The prototype's tests asserted on values they fed their own mocks. The rule that
 |---|---|
 | `packages/db` and API | **testcontainers** with real `postgis/postgis:16-3.4` and real Redis. Never mock the database or the queue — for anything touching geometry, PostGIS behaviour *is* the thing under test. |
 | Tenancy | A dedicated suite: authenticate as org A, assert **404** (not 403) on every org-B resource, against real RLS. |
-| Sentinel Hub | Recorded HTTP fixtures (msw or nock) of real captured responses, replayed, with assertions on parsed output for a known input. Plus one `@live` test against the real API, excluded from CI. |
-| Raster processing | Golden fixtures — a committed float32 GeoTIFF with known values, asserting computed stats within tolerance and a stable stress-polygon count. |
+| Sentinel Hub | Recorded HTTP fixtures of real captured responses, replayed, with assertions on parsed output for a known input. Plus one `@live` test against the real API, excluded from CI. **Not yet real** as of `TASK-satellite-pipeline`: no CDSE credentials were available to record a live response, so `packages/satellite`'s tests mock `fetch` directly instead — a real gap, recorded in that task's §10, to close once real credentials exist. |
+| Raster processing | Golden fixtures — a committed float32 GeoTIFF with known values, asserting computed stats within tolerance and a stable stress-polygon count. **Landed as a synthetic-but-known-values GeoTIFF, generated and decoded through the real `geotiff` reader/writer inside the test itself** (`packages/raster/src/golden.spec.ts`), not a captured live response — the honest substitute available without CDSE credentials. |
 | Jobs | Real BullMQ against testcontainers Redis. The retry path is tested by making the provider fail, not asserted by reading a config object. |
 | Web | Vitest + Testing Library; Playwright for task drag between columns, field draw → save, and stress-zone reclassify. |
 | Visual | Playwright screenshots of each of the 7 screens at 1440×900, diffed against the Figma export. |
@@ -896,7 +941,7 @@ Every environment variable the code reads is listed in `.env.example`.
 | NFR-1 | Home TTFB < 300 ms p95, LCP < 1.5 s p95, cold cache, 50 fields |
 | NFR-2 | `GET /fields/:id/observations` < 50 ms p95 |
 | NFR-3 | Raster PNG served from R2/CDN < 100 ms p95 |
-| NFR-4 | **Zero Sentinel Hub calls on any request path.** Enforced by a test asserting `packages/satellite` is not imported anywhere under `apps/api/src/controllers` |
+| NFR-4 | **Zero Sentinel Hub calls on any request path.** Enforced by a test asserting `@flora/satellite` is not imported anywhere under `apps/api/src` and does not appear in `apps/api/package.json`'s dependencies — corrected 2026-08-16 (`TASK-satellite-pipeline` §2.7) from an `apps/api/src/controllers` directory that doesn't exist in this codebase (controllers live in feature folders) |
 | NFR-5 | Daily refresh of 200 fields completes within 30 min at concurrency 2 |
 | NFR-6 | Monthly Sentinel Hub usage stays under 60% of the free tier at 200 fields — alert at 80% |
 | NFR-7 | Cross-tenant suite: 100% of resource endpoints return 404 for a foreign-org id |
@@ -916,7 +961,7 @@ everything else is sequenced by how directly it serves them.
 |---|---|---|
 | **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell, domain schema (farms/crops/fields/crop_cycles/observations/stress_zones/tasks + children, composite FKs, RLS) — **landed 2026-08-15** (`TASK-foundations`, `TASK-auth-tenancy`, `TASK-design-system-shell`, `TASK-domain-schema`) — **complete** | shell |
 | **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, GeoJSON import, crop cycles, growth/species/quantity, Mapbox list + map — **landed 2026-08-16** (`TASK-fields`) — **complete** (KML/Shapefile import still open, `TASK-fields-import`) | `1:35172` |
-| **2 — Crop Stress** | `packages/satellite`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, detection review UI | `18:6567` |
+| **2 — Crop Stress** | **Split 2026-08-16 (`TASK-satellite-pipeline` §1.1) into two tasks — the write path is too large to review as one deliverable alongside the densest screen in the design.** `TASK-satellite-pipeline`: `packages/satellite` + `packages/raster`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, six endpoints — no screen, **landed 2026-08-16** (offline-development seam: `db:seed:satellite` makes the next task buildable with no CDSE credentials). `TASK-crop-stress` (next): `18:6567` itself — the raster overlay, colour-ramp legend, detection list/popover, date picker, mute/classify/delete | `18:6567` |
 | **3 — Tasks** | Task domain scoped to fields, board with drag, list, timeline, watering volumes (§4.4) | `24:11420` |
 | **4 — Home** | Rollups, scoring, re-sourced KPI row (§4.4), all Home widgets | `1:12913` |
 | **5 — Weather** | Open-Meteo ingest + console | `3:5274` |

@@ -1,0 +1,32 @@
+{
+  "name": "@flora/raster",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "3.1111.0",
+    "@flora/contracts": "workspace:*",
+    "@turf/turf": "7.4.0",
+    "d3-contour": "4.0.2",
+    "geotiff": "3.0.5",
+    "sharp": "0.35.3"
+  },
+  "devDependencies": {
+    "@flora/config": "workspace:*",
+    "@types/d3-contour": "3.0.6",
+    "@types/geojson": "7946.0.16",
+    "typescript": "5.9.3",
+    "vitest": "4.1.10"
+  }
+}

@@ -1,3 +1,4 @@
+import type { MultiPolygon } from "@flora/contracts";
 import { sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
 import { Client, Pool } from "pg";
@@ -6,6 +7,7 @@ import { createDbClient } from "../client.js";
 import { memberships, organizations, users } from "../schema/auth.js";
 import { startTestInfra, type TestInfra } from "../test/containers.js";
 import { withOrganization } from "../tenancy.js";
+import { insertField } from "./fields.js";
 
 describe("tenancy", () => {
   let infra: TestInfra;
@@ -95,6 +97,35 @@ describe("tenancy", () => {
       }
     });
 
+    it("has exactly the two named SECURITY DEFINER functions (TASK-satellite-pipeline §2.4) — an allowlist, not a count", async () => {
+      // Was `expect(count).toBe(1)` before TASK-satellite-pipeline added
+      // scheduler_fields_due_for_refresh. A named allowlist is a strictly
+      // better guard than a count: it still fails if a *third* SECURITY
+      // DEFINER function appears anywhere, but for a different, legible
+      // reason than "the number changed" — and it independently asserts
+      // each function's own scope stays ids-only.
+      const { rows } = await owner.pool.query<{ proname: string }>(
+        `SELECT proname FROM pg_proc
+         WHERE prosecdef AND pronamespace = 'public'::regnamespace`,
+      );
+      expect(rows.map((r) => r.proname).sort()).toEqual(
+        ["auth_memberships_for_user", "scheduler_fields_due_for_refresh"].sort(),
+      );
+    });
+
+    it("scheduler_fields_due_for_refresh returns ids and a timezone only — nothing a leak would be interesting about", async () => {
+      const { rows } = await owner.pool.query<{ column_name: string }>(
+        `SELECT p.parameter_name AS column_name
+         FROM information_schema.parameters p
+         JOIN information_schema.routines r
+           ON r.specific_name = p.specific_name AND r.specific_schema = p.specific_schema
+         WHERE r.routine_name = 'scheduler_fields_due_for_refresh' AND r.routine_schema = 'public'
+           AND p.parameter_mode = 'OUT'
+         ORDER BY p.ordinal_position`,
+      );
+      expect(rows.map((r) => r.column_name)).toEqual(["organization_id", "farm_id", "field_id", "timezone"]);
+    });
+
     it("catches a scratch table added without a policy — demonstrating a real failure", async () => {
       const client = new Client({ connectionString: infra.ownerUrl });
       await client.connect();
@@ -139,6 +170,72 @@ describe("tenancy", () => {
     it("returns zero rows with no GUC set at all", async () => {
       const rows = await app.db.select().from(organizations).where(sql`slug LIKE 'tenancy-spec-%'`);
       expect(rows).toHaveLength(0);
+    });
+  });
+
+  describe("scheduler_fields_due_for_refresh (TASK-satellite-pipeline §6 item 15)", () => {
+    it("finds work in both orgs when called as flora_app with no GUC set at all — the exact query that silently returns zero rows if §2.4 is ignored", async () => {
+      const point = { type: "Point", coordinates: [-59.13, -4.58] };
+      const boundary: MultiPolygon = {
+        type: "MultiPolygon",
+        coordinates: [
+          [
+            [
+              [-59.134, -4.585],
+              [-59.132, -4.585],
+              [-59.132, -4.583],
+              [-59.134, -4.583],
+              [-59.134, -4.585],
+            ],
+          ],
+        ],
+      };
+
+      const fieldIds: string[] = [];
+      for (const orgId of [orgAId, orgBId]) {
+        const { rows: farmRows } = await owner.pool.query<{ id: string }>(
+          `INSERT INTO farms (organization_id, name, location, timezone)
+           VALUES ($1, 'Scheduler Test Farm', ST_GeomFromGeoJSON($2), 'America/Manaus')
+           RETURNING id`,
+          [orgId, JSON.stringify(point)],
+        );
+        const farmId = farmRows[0]!.id;
+
+        const { rows: cropRows } = await owner.pool.query<{ id: string }>(
+          `INSERT INTO crops (organization_id, name, slug) VALUES ($1, 'Corn', 'corn') RETURNING id`,
+          [orgId],
+        );
+        const cropId = cropRows[0]!.id;
+
+        await withOrganization(owner.db, orgId, async (tx) => {
+          const fieldId = await insertField(tx, {
+            organizationId: orgId,
+            farmId,
+            name: "Scheduler Test Field",
+            boundary,
+            position: 1,
+          });
+          fieldIds.push(fieldId);
+          await tx.execute(sql`
+            INSERT INTO crop_cycles (organization_id, field_id, crop_id, planted_on, expected_harvest_on, status)
+            VALUES (${orgId}, ${fieldId}, ${cropId}, current_date, current_date + 100, 'growing')
+          `);
+        });
+      }
+
+      const { rows } = await app.pool.query<{
+        organization_id: string;
+        farm_id: string;
+        field_id: string;
+        timezone: string;
+      }>("SELECT * FROM scheduler_fields_due_for_refresh()");
+
+      const returnedOrgIds = new Set(rows.map((r) => r.organization_id));
+      expect(returnedOrgIds.has(orgAId)).toBe(true);
+      expect(returnedOrgIds.has(orgBId)).toBe(true);
+      for (const fieldId of fieldIds) {
+        expect(rows.some((r) => r.field_id === fieldId)).toBe(true);
+      }
     });
   });
 

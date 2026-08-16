@@ -8,7 +8,13 @@ import { configureApp } from '../src/bootstrap.js';
 import { asCookieHeader, relayCookies } from './cookie-utils.js';
 import { TenantProbeModule } from './fixtures/tenant-probe.module.js';
 import { getServer } from './http.js';
-import { getTestApp, seedFarmAndCrop, seedUserWithOrg } from './setup.js';
+import {
+  getTestApp,
+  seedFarmAndCrop,
+  seedObservation,
+  seedStressZone,
+  seedUserWithOrg,
+} from './setup.js';
 
 type Method = 'get' | 'post' | 'patch' | 'delete';
 
@@ -224,6 +230,143 @@ const REGISTRY: RegistryEntry[] = [
       };
     },
   },
+  {
+    name: 'GET /fields/:id/observations',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const fieldAId = await createField(app, cookiesA, farmA.farmId, -94.1);
+      const fieldBId = await createField(app, cookiesB, farmB.farmId, -94.2);
+      await seedObservation(orgA.organizationId, fieldAId);
+      await seedObservation(orgB.organizationId, fieldBId);
+      return {
+        cookies: cookiesA,
+        method: 'get',
+        ownPath: `/api/v1/fields/${fieldAId}/observations`,
+        otherPath: `/api/v1/fields/${fieldBId}/observations`,
+      };
+    },
+  },
+  {
+    name: 'GET /fields/:id/observations/dates',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const fieldAId = await createField(app, cookiesA, farmA.farmId, -94.3);
+      const fieldBId = await createField(app, cookiesB, farmB.farmId, -94.4);
+      await seedObservation(orgA.organizationId, fieldAId);
+      await seedObservation(orgB.organizationId, fieldBId);
+      return {
+        cookies: cookiesA,
+        method: 'get',
+        ownPath: `/api/v1/fields/${fieldAId}/observations/dates`,
+        otherPath: `/api/v1/fields/${fieldBId}/observations/dates`,
+      };
+    },
+  },
+  {
+    name: 'POST /fields/:id/observations/refresh',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const fieldAId = await createField(app, cookiesA, farmA.farmId, -94.5);
+      const fieldBId = await createField(app, cookiesB, farmB.farmId, -94.6);
+      return {
+        cookies: cookiesA,
+        method: 'post',
+        ownPath: `/api/v1/fields/${fieldAId}/observations/refresh`,
+        otherPath: `/api/v1/fields/${fieldBId}/observations/refresh`,
+      };
+    },
+  },
+  {
+    name: 'GET /fields/:id/stress-zones',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const fieldAId = await createField(app, cookiesA, farmA.farmId, -94.7);
+      const fieldBId = await createField(app, cookiesB, farmB.farmId, -94.8);
+      await seedStressZone(orgA.organizationId, fieldAId);
+      await seedStressZone(orgB.organizationId, fieldBId);
+      return {
+        cookies: cookiesA,
+        method: 'get',
+        ownPath: `/api/v1/fields/${fieldAId}/stress-zones`,
+        otherPath: `/api/v1/fields/${fieldBId}/stress-zones`,
+      };
+    },
+  },
+  {
+    name: 'PATCH /stress-zones/:id',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const fieldAId = await createField(app, cookiesA, farmA.farmId, -94.9);
+      const fieldBId = await createField(app, cookiesB, farmB.farmId, -95.0);
+      const zoneAId = await seedStressZone(orgA.organizationId, fieldAId);
+      const zoneBId = await seedStressZone(orgB.organizationId, fieldBId);
+      return {
+        cookies: cookiesA,
+        method: 'patch',
+        ownPath: `/api/v1/stress-zones/${zoneAId}`,
+        otherPath: `/api/v1/stress-zones/${zoneBId}`,
+        body: { muted: true },
+      };
+    },
+  },
+  {
+    name: 'DELETE /stress-zones/:id',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const fieldAId = await createField(app, cookiesA, farmA.farmId, -95.1);
+      const fieldBId = await createField(app, cookiesB, farmB.farmId, -95.2);
+      const zoneAId = await seedStressZone(orgA.organizationId, fieldAId);
+      const zoneBId = await seedStressZone(orgB.organizationId, fieldBId);
+      return {
+        cookies: cookiesA,
+        method: 'delete',
+        ownPath: `/api/v1/stress-zones/${zoneAId}`,
+        otherPath: `/api/v1/stress-zones/${zoneBId}`,
+      };
+    },
+  },
 ];
 
 describe('cross-tenant suite (e2e, NFR-7)', () => {
@@ -269,7 +412,7 @@ describe('cross-tenant suite (e2e, NFR-7)', () => {
         [method](ownPath)
         .set('Cookie', cookies)
         .send(body);
-      expect([200, 201, 204]).toContain(ownRes.status);
+      expect([200, 201, 202, 204]).toContain(ownRes.status);
     },
   );
 });

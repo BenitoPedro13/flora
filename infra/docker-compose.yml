@@ -62,6 +62,7 @@ services:
       /bin/sh -c "
       mc alias set local http://storage:9000 flora flora-dev-secret &&
       mc mb -p local/flora-rasters &&
+      mc anonymous set download local/flora-rasters &&
       exit 0
       "
 

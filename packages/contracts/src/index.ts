@@ -10,3 +10,4 @@ export * from "./crop.js";
 export * from "./crop-cycle.js";
 export * from "./field.js";
 export * from "./import.js";
+export * from "./stress-zone.js";

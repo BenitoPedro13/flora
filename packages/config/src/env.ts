@@ -15,9 +15,22 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_BUCKET: z.string().min(1),
+  // Composed with a stored raster key to build the public PNG URL returned
+  // by the API — never stored itself, never a signed URL (invariant 2).
+  R2_PUBLIC_BASE_URL: z.string().url(),
   NEXT_PUBLIC_MAPBOX_TOKEN: z.string().min(1),
-  CDSE_CLIENT_ID: z.string().min(1),
-  CDSE_CLIENT_SECRET: z.string().min(1),
+  // Optional (TASK-satellite-pipeline §2.12, §7 decision 4): a blank value
+  // used to fail every app's boot, which blocked building TASK-crop-stress
+  // off the seed with no CDSE account. Only apps/worker actually reads
+  // these — see its own startup warning when they're unset.
+  CDSE_CLIENT_ID: z.string().optional(),
+  CDSE_CLIENT_SECRET: z.string().optional(),
+  // Default false (TASK-satellite-pipeline §2.12): nobody wants a 3am job
+  // firing against live CDSE quota from a laptop.
+  SATELLITE_SCHEDULE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
   // HS256 signing key for access + refresh tokens (architecture §10). ≥32 bytes so
   // it carries enough entropy for HMAC-SHA256 — shorter keys are brute-forceable.
   JWT_SIGNING_KEY: z.string().min(32),

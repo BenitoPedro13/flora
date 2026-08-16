@@ -587,6 +587,43 @@ export async function deleteField(tx: Tx, organizationId: string, id: string): P
   await tx.execute(sql`DELETE FROM fields WHERE organization_id = ${organizationId} AND id = ${id}`);
 }
 
+/** A cheap existence check for the field-scoped observation/stress-zone endpoints' 404 (NFR-7) — no crop-cycle join, unlike `getFieldWithCycle`. */
+export async function fieldExists(tx: Tx, organizationId: string, id: string): Promise<boolean> {
+  const rows = await tx.execute<{ exists: boolean }>(sql`
+    SELECT EXISTS (SELECT 1 FROM fields WHERE organization_id = ${organizationId} AND id = ${id}) AS exists
+  `);
+  return rows.rows[0]!.exists;
+}
+
+export interface RefreshResult {
+  succeeded: boolean;
+  error: string | null;
+}
+
+/**
+ * NFR-8: `lastRefreshAt` moves on every attempt; `lastRefreshSucceededAt`
+ * only on success, so a farmer sees the last time data actually changed, not
+ * merely the last time the worker tried. `lastRefreshError` is cleared on
+ * success and set only on the final (post-retry) failure — a scene skipped
+ * for cloud cover is not a failure and must not touch either column
+ * (TASK-satellite-pipeline §6 item 5).
+ */
+export async function recordRefreshResult(
+  tx: Tx,
+  organizationId: string,
+  id: string,
+  result: RefreshResult,
+): Promise<void> {
+  await tx.execute(sql`
+    UPDATE fields
+    SET last_refresh_at = now(),
+      last_refresh_succeeded_at = CASE WHEN ${result.succeeded} THEN now() ELSE last_refresh_succeeded_at END,
+      last_refresh_error = ${result.error},
+      updated_at = now()
+    WHERE organization_id = ${organizationId} AND id = ${id}
+  `);
+}
+
 /** `max(position) + 1` for the org's farm — the append position for a newly created field. */
 export async function nextFieldPosition(tx: Tx, organizationId: string, farmId: string): Promise<number> {
   const rows = await tx.execute<{ next: string }>(sql`

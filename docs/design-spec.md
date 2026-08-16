@@ -429,6 +429,15 @@ and absolute modes. Bottom-right: a round green assistant FAB.
 (`24 Aug 23` · `4.5 ac` · `NDVI: 0.52` in red) · a full-width classification select · a
 two-button footer split by a divider: **Mute** and **Delete**.
 
+**Resolved 2026-08-16 (`TASK-satellite-pipeline` §2.12) — the `4.5 ac` popover figure vs.
+architecture §7.5's 4 ac zone cap.** The popover is illustrative: this specific mockup number was
+never derived from the detector, and the shipped rule is the cap, not the sample. Every real zone
+`packages/raster/src/detect.ts` produces is `<= 4 ac` — a candidate region larger than that is
+split by the grid-and-merge rule (`TASK-satellite-pipeline` §2.9, §7 decision 3) into multiple
+zones, each `<= 4 ac`, before any zone reaches the database or this popover. A future designer
+pass should swap the mock's `4.5 ac` for a value under 4 to match, but no code changes on this
+resolution.
+
 ### 5.4 Fields — Management — `15:8608`
 
 Panel: "Field Management" · a `Zone | Productivity | Nitrogen Rx` segmented control
@@ -651,6 +660,7 @@ not extractions:
 | D16 | **The field editor (Add/Edit Field) has no artboard.** Name, boundary drawing, species (with inline "add species"), planted/expected-harvest dates, status, quantity, and delete-confirmation are all undesigned. Built 2026-08-16 (`TASK-fields` §2.8) from AlignUI primitives (`Input`, `Select`, `Modal`, `Label`, `Hint`) and the §4.5 card anatomy — `components/flora/field-editor.tsx`. |
 | D17 | **Sort and Filter have no menus.** `1:35172` shows the collapsed toolbar controls only, no open state. Built 2026-08-16 (`TASK-fields` §2.7) as compact `Select` triggers — `Name A–Z` / `Name Z–A` / `Newest` / `Manual` for sort, crop species for filter — `apps/web/app/(app)/fields/fields-toolbar.tsx`. |
 | D18 | **No import flow is designed.** `File Upload Cards [1.0]` exists as a PRO block reference (§6.2) but the preview table and its per-row verdicts are not drawn. Built 2026-08-16 (`TASK-fields` §2.9) as `ImportCard` — `components/flora/import-card.tsx` — GeoJSON only; KML/Shapefile wait on architecture §11.5's parser `[VERIFY]`. |
+| D19 | **The raster colour ramp (§5.3, `18:6567`) has no exact hex stops** — the Figma names it qualitatively ("red→yellow→green") and shows only the legend's numeric labels (`.78 .71 .63 .56 .48 .41`), never the ramp's own swatch values. `packages/raster/src/ramp.ts` (`TASK-satellite-pipeline` §2.8) picks a defensible three-stop red/yellow/green gradient and documents it as a default pending designer sign-off — it is intentionally **not** treated as verified against the Figma, and is the one file besides `globals.css`, the chart config, and `components/map/config.ts` allowed raw colour values, because it encodes pixels into a PNG rather than styling a component (invariant 7 governs `apps/web`, not a raster encoder). Revisit if a designer supplies exact stops. |
 
 ---
 
