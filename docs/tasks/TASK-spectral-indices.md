@@ -6,16 +6,23 @@
 > MSAVI · RECI · NDWI · PRI · MCARI, with Productivity map / Soil brightness / Elevation greyed
 > out), supplied as a screenshot.
 >
-> **Phase:** slots after `TASK-weather` (Phase 5) and before `TASK-management-zones` (Phase 6).
-> It is not in architecture §16's phasing and does not displace anything there.
+> **Phase:** **built next, before `TASK-weather`** (product owner's call, 2026-08-16). It is
+> not in architecture §16's phasing and displaces nothing there — Weather is untouched and
+> stays ready to build. Nothing in this task depends on Weather, or the reverse.
 >
-> **Two findings decide the shape of this task, and both were measured, not assumed:**
+> **Status: ready to build. All seven §7 decisions are taken and every `[VERIFY]` is closed
+> against the real CDSE account or a published source** — §7 and §10 have the measurements.
 >
-> 1. **The marginal cost of ten more indices is one extra input band, not ten more requests.**
->    Sentinel Hub charges per *input* band, never per output (§1.3). One evalscript can emit
->    every index as a separate named output in a single Process API call — which is what the
->    pipeline already does for `index` + `scl`.
-> 2. **The shipped NDVI raster is already "Contrasted NDVI".** `rampDomain()` stretches every
+> **Three findings decide the shape of this task. All three are measured, none assumed:**
+>
+> 1. **Extra outputs are free. Literally zero.** A controlled A/B/C against the live account
+>    (§1.3) shows an 11-output request costs **exactly** what a 2-output request with the same
+>    input bands costs, to the last decimal. Cost is a function of *input bands* only. One
+>    evalscript emits every index in one Process call — the shape the pipeline already uses for
+>    `index` + `scl`, widened from 2 outputs to 11.
+> 2. **The whole feature costs +17%**, all of it the one extra SWIR band: **4.0 → 4.667 PU**
+>    per refresh, measured off CDSE's own `x-processingunits-spent` header.
+> 3. **The shipped NDVI raster is already "Contrasted NDVI".** `rampDomain()` stretches every
 >    raster to that scene's own p10→p90. The plain, fixed-domain NDVI in the reference menu is
 >    the variant this codebase *doesn't* have (§1.4).
 
@@ -64,41 +71,68 @@ data model.
 - **`true_color` has no real path.** A true-colour composite is a 3-band RGB PNG with no scalar
   statistics and no stress polygons — a different pipeline branch, not a different formula.
 
-### 1.3 The cost question, answered
+### 1.3 The cost question, answered — measured, not estimated
 
-**Verified 2026-08-16 against CDSE's own Processing Unit documentation.** A PU is
-512×512 px · **3 input bands** · 1 sample/px · ≤16-bit output. The multipliers are:
+CDSE's documented formula: 1 PU = 512×512 px · **3 input bands** · 1 sample/px · ≤16-bit output.
 
 ```
 PU = (output area / 512×512) × (input bands / 3) × (output format) × (samples) × (surcharges)
 ```
 
-> "dividing the requested number of **input** bands by 3" — **the cost depends on input bands,
-> not output bands.** Minimum 0.005 PU per Process request. FLOAT32 output is a 2× multiplier.
+FLOAT32 output is a **2×** multiplier. The documentation says the band factor divides the
+requested number of **input** bands by 3 — nothing about outputs.
 
-So the honest cost table for one refresh of one field:
+**Verified 2026-08-16 against the real CDSE account**, three requests, same field, same scene,
+reading `x-processingunits-spent` off each response. The C run exists solely to isolate output
+count from band count:
 
-| Approach | Input bands | Relative PU | Verdict |
-|---|---|---|---|
-| Today (NDVI only) | 6 (`B02,B03,B04,B05,B08,SCL`) | 2.0× | baseline |
-| **Eleven indices, one request, N outputs** | **7** (`+B11`) | **2.33×** | **+17%** |
-| Eleven indices, one request per index | 6–7 each | ~22× | 11× the request count against a **10,000 req/month** tier |
+| Run | Input bands | Outputs | Body | **Measured PU** |
+|---|---|---|---|---|
+| **A** — today's shape | 6 (`B02,B03,B04,B05,B08,SCL`) | 2 (`ndvi`,`scl`) | 99 KB | **4.0** |
+| **B** — proposed | 8 (`+B11,B12`) | **11** | 976 KB | **5.3333** |
+| **C** — control | 8 (`+B11,B12`) | 2 | 99 KB | **5.3333** |
 
-**This is the whole design.** One evalscript, one Process call, every index as its own named
-output — exactly the shape `TASK-satellite-pipeline` §2.2 already built for `index` + `scl`,
-extended from two outputs to twelve. Adding ten indices costs **+17%**, and the free tier's
-binding constraint is the *request* count, which does not move at all.
+**B and C are identical to the last decimal.** Ten extra outputs and ten times the payload cost
+**exactly zero** additional PU. Cost is a pure function of input bands, and the measurements
+match the formula exactly (6/3 × 2 = 4.0; 8/3 × 2 = 5.333).
 
-`[VERIFY: the response is already a TAR of named members (TASK-satellite-live's fix). Confirm
-CDSE returns twelve members as readily as two, and that no per-response size ceiling is hit —
-twelve FLOAT32 rasters at field resolution is a materially larger body than two. Measure one
-real call before committing to twelve outputs; fall back to two or three grouped calls if a
-ceiling exists.]`
+**Both `[VERIFY]`s on this path are closed by that run:**
 
-`[VERIFY: the live PU cost per refresh is **still unmeasured** — architecture §11.1 and
-`TASK-satellite-pipeline` §6 item 13 have both been open since the pipeline landed. This task
-changes the multiplier, so it is the natural moment to finally read the number off CDSE's usage
-dashboard, before and after. NFR-6 (stay under 60% of tier) cannot be evaluated without it.]`
+- **CDSE returns 11 named TAR members as readily as 2** — HTTP 200, `application/x-tar`,
+  2.7 s, 976 KB, one `.tif` member per output, no ceiling hit at 512×512. The grouped-calls
+  fallback this document planned for is unnecessary.
+- **The live PU cost per refresh is 4.0 PU** — open since `TASK-satellite-pipeline` §6 item 13
+  and architecture §11.1, now closed. The production request is a fixed 512×512
+  (`RASTER_WIDTH_PX`), so this *is* the production number, not a proxy for it.
+
+**Final shape: 7 input bands (`+B11` only, not B12 — §7 decision 7) = 4.667 PU, or +17%.**
+
+#### NFR-6, evaluated at last
+
+The free tier is **10,000 PU/month and 10,000 requests/month**
+([CDSE quotas](https://documentation.dataspace.copernicus.eu/Quotas.html)) — note that this is
+**PU**, and architecture §7.1 currently mentions only the request ceiling.
+
+The refresh processor already **skips the Process call entirely when that scene date is already
+stored** (`refresh.processor.ts`, "the cheapest possible quota saving"). So the daily schedule
+does *not* buy a scene per day — it buys one per *new* scene, and Sentinel-2's revisit is ~5
+days. At 200 fields:
+
+| | PU/refresh | New scenes/field/month | PU/month | % of tier |
+|---|---|---|---|---|
+| Today | 4.0 | ~6 | 4,800 | 48% |
+| **This task** | **4.667** | ~6 | **5,600** | **56%** ✅ |
+| If B12 were added too | 5.333 | ~6 | 6,400 | 64% ❌ |
+
+**56% clears NFR-6's 60% budget — and it is the reason §7 decision 7 rejects B12.** Adding a
+band nothing needs would push a passing budget into an alerting one.
+
+**The lever, if it ever binds:** FLOAT32 output is a 2× multiplier that buys precision nobody
+uses — UINT16 gives 65,536 steps across an index bounded in [−1, 1]. Switching output
+`sampleType` would **halve** every number above (7 bands → 2.33 PU, 28% of tier), at the cost
+of a documented scale/offset convention and a clamp range for the unbounded indices (RECI,
+MCARI). **Not in this task** — recorded because it is the obvious first move if field count
+grows, and because it means the ceiling is much further away than these numbers suggest.
 
 ### 1.4 The eleven requested layers, honestly classified
 
@@ -115,36 +149,42 @@ Not all eleven are indices, and two of them are not computable from Sentinel-2 a
 | **MSAVI** | MSAVI2: `(2·B08+1 − √((2·B08+1)² − 8·(B08−B04)))/2` | 10 m | ❌ new formula, no new band |
 | **RECI** | `(B08/B05) − 1` — red-edge chlorophyll | B05 20 m | ❌ new formula, no new band |
 | **MCARI** | `((B05−B04) − 0.2·(B05−B03))·(B05/B04)` | B05 20 m | ❌ new formula, no new band |
-| **PRI** | **Cannot be computed properly.** True PRI is `(R531−R570)/(R531+R570)`; **Sentinel-2 has no 531 nm band** (B02 490, B03 560, B04 665) | — | 🚩 §7 decision 4 |
-| **SMI** | Soil Moisture Index — **the name covers several unrelated formulations** (an NDMI rescaling, an LST/NDVI trapezoid needing thermal data Sentinel-2 does not carry, a soil-water-content ratio) | — | 🚩 §7 decision 5 |
+| **PRI** | True PRI is `(R531−R570)/(R531+R570)` and **Sentinel-2 has no 531 nm band** (B02 490, B03 560, B04 665). A blue/green substitution has published use, with explicitly acknowledged trade-offs | 10 m | ⚠️ ships as **`pri_proxy`** — §7 decision 4 |
+| **SMI** | The bare name covers several unrelated formulations, one of which (LST/NDVI trapezoid) needs thermal data Sentinel-2 does not carry. **Resolved to VSDI** (Zhang et al. 2013) — a published, single-scene, optical soil *and* vegetation moisture index on Blue/Red/SWIR | B11 20 m | ⚠️ ships as **`vsdi`**, labelled "SMI" — §7 decision 5 |
 | *Productivity map* · *Soil brightness* · *Elevation* | Greyed out in the reference menu too | — | Out of scope (§5). Elevation is a DEM collection, a different data source entirely |
 
-**PRI and SMI are the two that must not be quietly faked.** Every other row is arithmetic on
-bands we already pay for. These two are where a plausible-looking formula would ship a number
-that means nothing — and `CLAUDE.md`'s first writing rule exists for exactly this case.
+**PRI and SMI are the two that must not be quietly faked**, and neither is shipped under a name
+that overstates it. Every other row is arithmetic on bands we already pay for.
 
 ---
 
 ## 2. Planned changes
 
-### 2.1 One request, twelve outputs
+### 2.1 One request, eleven outputs
 
 `packages/satellite/src/cdse/evalscript.ts` stops being "one evalscript per index" and becomes
 **one evalscript emitting every scheduled index**:
 
-- `input.bands` gains **`B11`** → `["B02","B03","B04","B05","B08","B11","SCL"]`.
+- `input.bands` gains **`B11` only** → `["B02","B03","B04","B05","B08","B11","SCL"]`. **Not
+  B12** (§7 decision 7).
 - `setup().output` returns one FLOAT32 entry per index plus the existing `scl`.
 - `evaluatePixel` returns one key per output.
 - `evalscriptFor(index)` is kept for the single-index path (the on-demand refresh) and joined
   by `evalscriptForAll(indices)`.
+
+A working evalscript of exactly this shape was run against the live account while planning
+(§1.3) — 11 outputs, 200 OK. The formulas in §1.4 are the ones it used; they are known to
+compile under evalscript V3, including `Math.sqrt`/`Math.pow` in MSAVI2.
 
 Keep the per-index function. Do not delete a working narrow path to build a wide one — the
 manual refresh (`TASK-crop-stress`) can stay cheap when a user is asking for one layer.
 
 ### 2.2 Contracts and the enum
 
-`observationIndexValues` grows: `ndmi`, `msavi`, `reci`, `mcari` (and see §7 for `pri`/`smi`).
-That is a **pgEnum**, so it needs a migration — `ALTER TYPE observation_index ADD VALUE`.
+`observationIndexValues` grows by six: `ndmi`, `msavi`, `reci`, `mcari`, `pri_proxy`, `vsdi`.
+The last two are named for what they actually are (§7 decisions 4 and 5) — the *menu labels*
+"PRI (proxy)" and "SMI" live in the UI layer, and the honest name lives in the data. That is a
+**pgEnum**, so it needs a migration — `ALTER TYPE observation_index ADD VALUE`.
 Note that Postgres will not let a new enum value be used in the same transaction that adds it;
 `drizzle-kit generate` does not always get this right, and `CLAUDE.md` §2.1 already requires
 reviewing generated migrations by hand.
@@ -152,7 +192,7 @@ reviewing generated migrations by hand.
 `true_color` is **not** a member of the scalar-index set. Split the type:
 
 ```
-scalarIndexValues   = [ndvi, ndre, ndwi, ndmi, evi, msavi, reci, mcari]
+scalarIndexValues     = [ndvi, ndre, ndwi, ndmi, evi, msavi, reci, mcari, pri_proxy, vsdi]
 renderableLayerValues = [...scalarIndexValues, "true_color"]
 ```
 
@@ -190,13 +230,14 @@ guard and a comment, not a feature.
 
 ### 2.5 Scheduling and cost control
 
-- The **daily scheduled refresh** computes the full scalar set in its one call (+17%, §1.3).
+- The **daily scheduled refresh** computes all ten scalar indices in its one call
+  (§7 decision 6; +17% PU, §1.3).
 - `true_color` stays **on-demand only** — it is a 3-band RGB branch with no stats, and nobody
   needs yesterday's photo daily.
-- Re-check NFR-5 (200 fields in 30 min at concurrency 2): the request count does not change,
-  but each response is ~6× larger and the raster stage now runs 8 decodes per scene instead of
-  1. **The bottleneck moves from network to CPU.** Measure it; do not assume the existing
-  headroom survives.
+- Re-check NFR-5 (200 fields in 30 min at concurrency 2): the request count does not change and
+  the call itself took 2.7 s for 11 outputs, but the raster stage now runs **10 decodes per
+  scene instead of 1** against a ~10× larger body. **The bottleneck moves from network to
+  CPU.** Measure it; do not assume the existing headroom survives.
 
 ### 2.6 The switcher UI
 
@@ -275,9 +316,9 @@ outright.
 
 ## 6. Verification
 
-1. One real CDSE refresh returns every requested output, and the **measured PU cost** is read
-   off the usage dashboard and recorded — before and after — closing architecture §11.1's open
-   item.
+1. One real CDSE refresh returns every requested output, and `x-processingunits-spent` reads
+   **4.667** (7 bands × FLOAT32 at 512×512). If it reads higher, an unintended band is in the
+   request. The header is on every Process response — there is no need to open a dashboard.
 2. Every index's golden-fixture stats match hand-computed values within tolerance.
 3. A field refreshed once has N `observations` rows for that date and N distinct `raster_key`s.
 4. Switching layers in a real browser changes raster, legend stops and legend domain, without
@@ -288,17 +329,26 @@ outright.
 
 ---
 
-## 7. Decisions this task needs before code
+## 7. Decisions — all seven taken, 2026-08-16
 
-| # | Decision | Recommendation |
+Taken by the product owner (6) and resolved against the live account or published sources
+(1–5, 7). **Sonnet should build to the "Decision" column and not reopen these.**
+
+| # | Question | **Decision** |
 |---|---|---|
-| 1 | **"Contrasted NDVI" vs "NDVI"** — what ships today is the contrasted one (§1.4) | Ship **both**, as one index with two domain modes: `NDVI` on a fixed 0…1 domain, `Contrasted NDVI` on the existing p10→p90 stretch. Same raster data, two ramps — **no extra PU at all**. It is also the cheapest way to honour the reference menu exactly |
-| 2 | **Twelve outputs in one call, or grouped calls?** | Twelve, pending §1.3's `[VERIFY]` on response size. Fall back to two grouped calls if a ceiling appears |
-| 3 | **`true_color` as a separate type** | Yes (§2.2) |
-| 4 | **PRI** | **Do not ship it as "PRI".** Sentinel-2 lacks the 531 nm band. Either omit it, or ship it disabled with a tooltip saying it needs a hyperspectral or MODIS-class source — the same honesty the four undesigned buttons get elsewhere. `[VERIFY: whether any published, peer-reviewed Sentinel-2 PRI proxy exists and is worth offering under a clearly different name. Do not adopt a formula found only in a product's marketing page.]` |
-| 5 | **SMI** | Same treatment pending a definition. `[VERIFY: which SMI the reference product means. If it is an NDMI rescaling, it is free once B11 is in the request; if it is the LST/NDVI trapezoid, it needs thermal data Sentinel-2 does not carry and belongs to a different mission (Landsat 8/9 TIRS).]` |
-| 6 | **Does the daily schedule compute all eight scalar indices, or only NDVI + on-demand?** | All eight. +17% PU for a screen that feels instant on every layer, versus a spinner on ten of eleven menu items |
-| 7 | **B12 (SWIR-2)** | Not now. Nothing in the requested list needs it; adding it is another +14% for zero current features |
+| 1 | **"Contrasted NDVI" vs "NDVI"** — what ships today is the contrasted one (§1.4) | **Ship both**, as one index with two domain modes: `NDVI` on a fixed 0…1 domain, `Contrasted NDVI` on the existing p10→p90 stretch. Same stored raster, two ramps, **zero extra PU and zero extra storage** — and it honours the reference menu exactly |
+| 2 | **Many outputs in one call, or grouped calls?** | **One call, all outputs. Measured, not assumed** (§1.3): 11 outputs returned 200 OK in 2.7 s as an 11-member TAR, and cost **exactly** what 2 outputs cost with the same bands. The grouped-call fallback is unnecessary; delete the idea |
+| 3 | **`true_color` as a separate type** | **Yes** (§2.2). It has no scalar value, no domain, no polygons and no legend — it has never belonged in the index enum |
+| 4 | **PRI** | **Ship it, named `pri_proxy`, labelled "PRI (proxy)" in the menu.** Sentinel-2 has no 531 nm band; the blue/green substitution (B03/B02) has published use in CO₂-flux work adapted to Sentinel-2 and PlanetScope, with authors explicitly noting the trade-off against hyperspectral. The info tooltip must say it substitutes B02/B03 for 531/570 nm and is not comparable to true PRI. **A user must never see the bare word "PRI" and assume the real thing** |
+| 5 | **SMI** | **Ship VSDI** (Zhang et al. 2013) in the SMI slot: `1 − [(ρSWIR − ρblue) + (ρred − ρblue)]` over **B11/B04/B02**. It is published, peer-reviewed, computable from a **single scene**, and it targets soil *and* vegetation moisture — which is what the menu item promises. The two alternatives both fail: the LST/NDVI trapezoid needs thermal data Sentinel-2 does not carry (that is Landsat 8/9 TIRS), and OPTRAM needs dry/wet edges fitted across a long time series, so it is not a per-scene formula at all. Tooltip names VSDI and cites it |
+| 6 | **All indices daily, or NDVI + on-demand?** | **All of them, daily** — product owner's call, 2026-08-16. §1.3 makes it cheap: +17% PU, no change in request count, and every layer is instant instead of ten of eleven showing a spinner |
+| 7 | **B12 (SWIR-2)** | **No.** Confirmed by resolving decision 5: VSDI's SWIR term is **1565–1655 nm = B11 (1610 nm)**, not B12 (2190 nm). Nothing in the requested list needs B12, and adding it would take the NFR-6 budget from a passing **56%** to an alerting **64%** (§1.3) |
+
+**Sources to cite in the code, not in a commit message:** Zhang, Hong et al., [*VSDI: a visible
+and shortwave infrared drought index*](https://www.tandfonline.com/doi/abs/10.1080/01431161.2013.779046),
+Int. J. Remote Sensing 34(13), 2013; [CDSE Processing Unit
+definition](https://documentation.dataspace.copernicus.eu/APIs/SentinelHub/Overview/ProcessingUnit.html)
+and [quotas](https://documentation.dataspace.copernicus.eu/Quotas.html).
 
 ---
 
@@ -306,8 +356,11 @@ outright.
 
 1. **The enum migration.** `ALTER TYPE … ADD VALUE` cannot be used in the same transaction that
    adds it, and generated migrations get this wrong. Review by hand.
-2. **Response size** (§1.3's first `[VERIFY]`) — twelve FLOAT32 rasters per call.
-3. **Raster CPU** (§2.5) — 8 decodes per scene, not 1. NFR-5 is at risk, not the network.
+2. ~~**Response size.**~~ **RETIRED** — measured at 976 KB for 11 outputs, 200 OK in 2.7 s
+   (§1.3). No ceiling.
+3. **Raster CPU** (§2.5) — **now the only real scaling risk.** 10 decodes per scene instead of
+   1, and the network cost did not rise with it. NFR-5 (200 fields in 30 min at concurrency 2)
+   was measured against a single-index pipeline and must be re-measured, not assumed.
 4. **Ramp semantics.** Reusing the health ramp for NDWI or MCARI produces a picture that is
    confidently wrong rather than obviously broken — the most expensive kind of bug this project
    has hit twice already (the flat ramp, the unclipped seed raster).
@@ -323,3 +376,38 @@ outright.
 | `TASK-index-timeseries` | A per-index chart over the season — the obvious next ask once eight indices exist |
 | `TASK-farm-settings` | Unrelated, still open (`TASK-weather` §10) |
 | Design | This whole screen area has **no artboard**. The switcher, the info tooltips and the per-index legends all need a designer's pass — log as a new gap |
+| `TASK-pu-budget` *(only if field count grows)* | The FLOAT32 → UINT16 lever (§1.3) — halves every PU number, needs a scale/offset convention and clamp ranges for RECI/MCARI |
+
+---
+
+## 10. Decisions and `[VERIFY]`s resolved
+
+**Resolved at plan time, 2026-08-16, against the live CDSE account and published sources.**
+Nothing below was inferred from documentation alone, and two of the findings contradict what
+this document originally assumed.
+
+- **Output count is free — proved by a control, not by reading the docs.** Runs B and C (§1.3)
+  differ only in output count and returned **identical** `x-processingunits-spent`
+  (5.3333…) for a 976 KB and a 99 KB body. The documentation says cost divides *input* bands by
+  3; the control is what turns that into a fact this project can build on.
+- **The live PU cost of one refresh is 4.0 PU** — open since `TASK-satellite-pipeline` §6
+  item 13 and architecture §11.1, closed here. It needed no usage dashboard: CDSE returns
+  `x-processingunits-spent` on every Process response, which no previous task noticed.
+- **The free tier is 10,000 PU/month *and* 10,000 requests/month.** Architecture §7.1 currently
+  cites only the request ceiling — **the PU ceiling is the binding one** and §7.1 should say so.
+- **NFR-6 is evaluable for the first time, and it passes at 56%** — but only because
+  `refresh.processor.ts` already skips a scene it has stored, so a daily schedule buys ~6
+  scenes a month, not 30. Had it re-fetched daily, today's pipeline alone would sit at 240% of
+  the tier. That guard is doing more work than its one-line comment suggests.
+- **B12 is not needed** — resolving SMI to VSDI settled it: VSDI's SWIR term is 1565–1655 nm,
+  which is **B11**. This document had listed B12 as an open question with a "+14% for zero
+  features" recommendation; the answer turned out to be a fact about a formula, not a
+  preference.
+- **11 outputs return a clean 11-member TAR** in 2.7 s / 976 KB at 512×512. The grouped-call
+  fallback was never needed.
+- **PRI and SMI both got real answers instead of omissions** (§7 decisions 4 and 5), and both
+  ship under names that do not overstate what they are.
+
+**A cost fact worth carrying into every future satellite task:** FLOAT32 output is a flat **2×**
+PU multiplier. Half of every PU number this project has ever paid was buying precision past the
+fifth decimal of a ratio bounded in [−1, 1].
