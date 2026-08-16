@@ -61,8 +61,22 @@ const CYCLE_DAYS = 100;
  * to score, not just a repeated single crop across fields.
  */
 const HISTORICAL_CROPS = ["Corn", "Wheat", "Soy", "Rice"] as const;
-const HISTORICAL_HARVEST_OFFSETS_DAYS = [330, 240, 150, 60] as const;
 const HISTORICAL_CYCLE_DAYS = 75;
+// The last offset (20) lands inside Gathering Rate's current 30-day window
+// (rollups.ts's GATHERING_RATE_WINDOW_DAYS) — a widget scoped that tight
+// needs *something* recent, not just a spread across the full year, or its
+// rate reads a correct-but-empty 0.00 T/day even with 12 months of real
+// harvest history behind it. Consecutive offsets must differ by MORE than
+// HISTORICAL_CYCLE_DAYS or the same field ends up with two overlapping
+// cycles of different crops double-counting its area for the same month —
+// found live: plantingProductivity's sharePct exceeded 100 the one time
+// this array had two offsets (45, 12) only 33 days apart.
+const HISTORICAL_HARVEST_OFFSETS_DAYS = [330, 240, 150, 20] as const;
+for (let i = 1; i < HISTORICAL_HARVEST_OFFSETS_DAYS.length; i++) {
+  if (HISTORICAL_HARVEST_OFFSETS_DAYS[i - 1] - HISTORICAL_HARVEST_OFFSETS_DAYS[i] <= HISTORICAL_CYCLE_DAYS) {
+    throw new Error("HISTORICAL_HARVEST_OFFSETS_DAYS entries must differ by more than HISTORICAL_CYCLE_DAYS to avoid same-field cycle overlap");
+  }
+}
 
 interface DemoField {
   name: string;
@@ -184,7 +198,7 @@ async function main() {
     // harvested cycle), so this is safe to run again after the app has since
     // added more real data.
     const historyCount = await backfillHistoricalCropCycles(db, org.id, farm.id, cropByName, today);
-    console.log(`Backfilled 12-month harvested history for ${historyCount} field(s)`);
+    console.log(`Backfilled ${historyCount} harvested crop cycle(s) of 12-month history`);
   } finally {
     await pool.end();
   }
@@ -322,9 +336,14 @@ async function seedDemoFieldsAndTasks(
 /**
  * §2.12: 12 months of harvested history across all four seeded crops, on
  * every field the org currently has — real fields included, not just
- * `DEMO_FIELDS`. Skips a field that already has any harvested crop cycle,
- * so re-running this script never duplicates history it already wrote.
- * Returns the number of fields it actually backfilled.
+ * `DEMO_FIELDS`. Idempotency is **per cycle**, not per field: each of
+ * `HISTORICAL_HARVEST_OFFSETS_DAYS` is skipped only if a harvested cycle
+ * already exists at that exact computed `expected_harvest_on` (a date a
+ * real farmer's own data would not coincidentally collide with) — so
+ * widening or shifting the offsets later (as it needed to, once Gathering
+ * Rate's 30-day window turned up empty against an all-old spread) patches a
+ * field that was already backfilled once, instead of a per-field guard
+ * skipping it outright. Returns the number of cycles it actually inserted.
  */
 async function backfillHistoricalCropCycles(
   db: ReturnType<typeof createDbClient>["db"],
@@ -339,18 +358,9 @@ async function backfillHistoricalCropCycles(
     )
     .then((r) => r.rows);
 
-  let backfilled = 0;
+  let inserted = 0;
   await withOrganization(db, organizationId, async (tx) => {
     for (const [i, field] of orgFields.entries()) {
-      const already = await tx.execute<{ exists: boolean }>(sql`
-        SELECT EXISTS (
-          SELECT 1 FROM crop_cycles WHERE organization_id = ${organizationId} AND field_id = ${field.id} AND status = 'harvested'
-        ) AS exists
-      `);
-      if (already.rows[0]!.exists) {
-        continue;
-      }
-
       for (const [offsetIndex, harvestOffsetDays] of HISTORICAL_HARVEST_OFFSETS_DAYS.entries()) {
         const cropName = HISTORICAL_CROPS[(i + offsetIndex) % HISTORICAL_CROPS.length]!;
         const historicalCrop = cropByName.get(cropName);
@@ -359,6 +369,18 @@ async function backfillHistoricalCropCycles(
         }
         const harvestedOn = addDays(today, -harvestOffsetDays);
         const historicalPlantedOn = addDays(harvestedOn, -HISTORICAL_CYCLE_DAYS);
+
+        const already = await tx.execute<{ exists: boolean }>(sql`
+          SELECT EXISTS (
+            SELECT 1 FROM crop_cycles
+            WHERE organization_id = ${organizationId} AND field_id = ${field.id}
+              AND status = 'harvested' AND expected_harvest_on = ${isoDate(harvestedOn)}
+          ) AS exists
+        `);
+        if (already.rows[0]!.exists) {
+          continue;
+        }
+
         await tx.insert(cropCycles).values({
           organizationId,
           fieldId: field.id,
@@ -368,12 +390,12 @@ async function backfillHistoricalCropCycles(
           status: "harvested",
           quantityKg: String(400 + i * 50 + offsetIndex * 30),
         });
+        inserted++;
       }
-      backfilled++;
     }
   });
 
-  return backfilled;
+  return inserted;
 }
 
 main().catch((err) => {

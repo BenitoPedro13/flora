@@ -21,11 +21,13 @@
     "seed:demo": "dotenv -e ../../.env -- tsx src/seed-demo.ts",
     "seed:bulk": "dotenv -e ../../.env -- tsx src/seed-bulk.ts",
     "seed:satellite": "dotenv -e ../../.env -- tsx src/seed-satellite.ts",
-    "seed:rollups": "dotenv -e ../../.env -- tsx src/seed-rollups.ts"
+    "seed:rollups": "dotenv -e ../../.env -- tsx src/seed-rollups.ts",
+    "seed:weather": "dotenv -e ../../.env -- tsx src/seed-weather.ts"
   },
   "dependencies": {
     "@flora/contracts": "workspace:*",
     "@flora/raster": "workspace:*",
+    "@flora/weather": "workspace:*",
     "@node-rs/argon2": "2.1.0",
     "drizzle-orm": "0.45.2",
     "pg": "8.23.0"

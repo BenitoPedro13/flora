@@ -4,6 +4,7 @@ import type { Task } from "@flora/contracts";
 import * as Avatar from "@/components/ui/avatar";
 import * as AvatarGroup from "@/components/ui/avatar-group";
 import * as Divider from "@/components/ui/divider";
+import { cn } from "@/utils/cn";
 import { ActivityTag } from "./activity-tag";
 
 function formatDateRange(startsOn: string | null, dueOn: string | null): string | null {
@@ -51,6 +52,8 @@ export interface TaskCardProps {
   task: Task;
   onClick?: () => void;
   draggableProps?: React.HTMLAttributes<HTMLDivElement>;
+  /** Home's Pending Tasks card (TASK-home-dashboard §2.11): the footer row (comments/subtasks/dates) is omitted, 184px → 156px. Same block otherwise — the board must render byte-identically with this unset. */
+  compact?: boolean;
 }
 
 /**
@@ -62,13 +65,16 @@ export interface TaskCardProps {
  * card's 184px height), a null `progressPct` shows an empty 0% ring, and a
  * fully-null date range leaves the footer's right cluster empty.
  */
-export function TaskCard({ task, onClick, draggableProps }: TaskCardProps) {
+export function TaskCard({ task, onClick, draggableProps, compact = false }: TaskCardProps) {
   const dateRange = formatDateRange(task.startsOn, task.dueOn);
 
   return (
     <div
       data-testid={`task-card-${task.id}`}
-      className="flex h-[184px] w-full flex-col gap-0 rounded-2xl border border-stroke-soft-200 bg-bg-white-0 p-4"
+      className={cn(
+        "flex w-full flex-col gap-0 rounded-2xl border border-stroke-soft-200 bg-bg-white-0 p-4",
+        compact ? "h-[156px]" : "h-[184px]",
+      )}
       onClick={onClick}
       {...draggableProps}
     >
@@ -100,27 +106,29 @@ export function TaskCard({ task, onClick, draggableProps }: TaskCardProps) {
         <ActivityTag activity={task.activity} />
       </div>
 
-      <div className="mt-4 flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <div className="flex items-center gap-1">
-            <RiMessage3Line className="size-4 text-text-soft-400" aria-hidden />
-            <span className="text-label-xs text-text-sub-600">{task.commentCount}</span>
+      {compact ? null : (
+        <div className="mt-4 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-1">
+              <RiMessage3Line className="size-4 text-text-soft-400" aria-hidden />
+              <span className="text-label-xs text-text-sub-600">{task.commentCount}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              {/* `time-line`, not a checkbox/list icon — §1.3 note 2 logs this as a design defect and ships it as drawn. */}
+              <RiTimeLine className="size-4 text-text-soft-400" aria-hidden />
+              <span className="text-label-xs text-text-sub-600">
+                {task.subtaskDoneCount}/{task.subtaskCount}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            {/* `time-line`, not a checkbox/list icon — §1.3 note 2 logs this as a design defect and ships it as drawn. */}
-            <RiTimeLine className="size-4 text-text-soft-400" aria-hidden />
-            <span className="text-label-xs text-text-sub-600">
-              {task.subtaskDoneCount}/{task.subtaskCount}
-            </span>
-          </div>
+          {dateRange ? (
+            <div className="flex items-center gap-1">
+              <RiTimeLine className="size-4 text-text-soft-400" aria-hidden />
+              <span className="text-label-xs text-text-sub-600">{dateRange}</span>
+            </div>
+          ) : null}
         </div>
-        {dateRange ? (
-          <div className="flex items-center gap-1">
-            <RiTimeLine className="size-4 text-text-soft-400" aria-hidden />
-            <span className="text-label-xs text-text-sub-600">{dateRange}</span>
-          </div>
-        ) : null}
-      </div>
+      )}
     </div>
   );
 }

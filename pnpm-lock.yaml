@@ -451,6 +451,9 @@ importers:
       '@flora/raster':
         specifier: workspace:*
         version: link:../raster
+      '@flora/weather':
+        specifier: workspace:*
+        version: link:../weather
       '@node-rs/argon2':
         specifier: 2.1.0
         version: 2.1.0
