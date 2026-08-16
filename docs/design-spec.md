@@ -121,7 +121,7 @@ The CLI prompts, and the answers for Flora are:
 | Prompt | Answer | Why |
 |---|---|---|
 | Primary colour | **Green** | Figma `primary-base` = `#1daf61` |
-| Neutral colour | **Gray** | Figma neutrals `#0e121b / #525866 / #99a0ae / #e1e4ea / #f5f7fa` are AlignUI's gray ramp |
+| Neutral colour | **Slate** | Figma neutrals `#0e121b / #525866 / #99a0ae / #e1e4ea / #f5f7fa` are AlignUI's **slate** ramp — see the correction below |
 | Colour format | **oklch** | Recommended for Tailwind v4.1 |
 | Custom prefix | *(blank)* | |
 | Create `tailwind.config`? | **No — CSS-only** | v4 CSS-first |
@@ -131,9 +131,22 @@ The CLI prompts, and the answers for Flora are:
 > scaffold and is being replaced anyway (architecture §2.2), so this is safe here — but it
 > must be run before any Flora-specific CSS is added to that file.
 
-`[VERIFY: after running the CLI, diff the generated --primary-base against #1daf61. If
-AlignUI's green-600 differs, override --primary-base/-dark/-darker explicitly rather than
-accepting a near-miss — the accent appears on every screen.]`
+**Correction, resolved by `TASK-design-system-shell` (2026-08-15) — the neutral colour is
+Slate, not Gray.** This document originally called the five Figma neutral hexes "AlignUI's
+gray ramp." They are not: AlignUI's **Gray** primitive is fully achromatic (`oklch(L 0 0)` at
+every step — 50 renders `#f7f7f7`), while the Figma hexes above have a faint blue tint and
+convert exactly to AlignUI's **Slate** ramp (verified by converting each generated `oklch()`
+value to sRGB: slate-50 → `#f5f7fa`, slate-950 → `#0e121b`, matching the Figma values to the
+hex digit). Picking Gray at the CLI prompt renders every `bg-weak-50` / `text-sub-600` /
+`stroke-soft-200` etc. surface a shade greyer than the Figma. The CLI was re-run with Slate;
+`app/globals.css`'s `--color-neutral-*` aliases now point at the slate ramp.
+
+**Resolved 2026-08-15 — the `[VERIFY]` on `--primary-base`.** The CLI's generated
+`--color-primary-base` (`var(--color-green-600)`, `oklch(66.41% 0.1630 153.13)`) converts to
+sRGB `#1daf61` exactly — no override needed. Verified in code by
+`e2e/shell.spec.ts`'s "accent resolves to #1daf61" test, which clamps the computed value
+through a canvas 2D context (`getComputedStyle` serializes `oklch()` back as `lab()`/`oklab()`,
+not `rgb()`, so a raw string comparison is not reliable).
 
 Then, per the AlignUI Next.js guide:
 - Utilities `cn`, `tv`, `recursiveCloneChildren`, `Polymorphic` → `utils/`
@@ -158,14 +171,21 @@ the hex** — the hex column exists only to verify the CLI output.
 | `icon/sub-600` | `text-icon-sub-600` | `#525866` | Default icon |
 | `icon/soft-400` | `text-icon-soft-400` | `#99a0ae` | De-emphasised icon |
 | `icon/disabled-300` | `text-icon-disabled-300` | `#cacfd8` | Disabled icon |
-| `state/success/base` | `bg-state-success-base` | `#1fc16b` | Positive delta badge text |
-| `state/success/lighter` | `bg-state-success-lighter` | `#e0faec` | Positive delta badge fill |
-| `state/error/base` | `bg-state-error-base` | `#fb3748` | Negative delta |
-| `state/error/light` | — | `#ffc0c5` | |
-| `state/verified/base` | — | `#47c2ff` | "Watering" activity tag |
-| `state/verified/lighter` | — | `#ebf8ff` | "Watering" tag fill |
+| `state/success/base` | `bg-success-base` | `#1fc16b` | Positive delta badge text |
+| `state/success/lighter` | `bg-success-lighter` | `#e0faec` | Positive delta badge fill |
+| `state/error/base` | `bg-error-base` | `#fb3748` | Negative delta |
+| `state/error/light` | `bg-error-light` | `#ffc0c5` | |
+| `state/verified/base` | `text-verified-base` | `#47c2ff` | "Watering" activity tag |
+| `state/verified/lighter` | `bg-verified-lighter` | `#ebf8ff` | "Watering" tag fill |
 | `yellow/500` | `text-yellow-500` | `#f6b51e` | "Fertilization" tag |
 | `yellow/200` | `bg-yellow-200` | `#ffecc0` | "Fertilization" tag fill |
+
+**Correction, resolved 2026-08-15 (`TASK-design-system-shell`) — no `state-` infix.** This
+table originally listed `bg-state-success-base` / `bg-state-error-base`. The AlignUI CLI emits
+`--color-success-base`, `--color-error-base`, `--color-verified-base` etc. directly (no
+`state-` segment); the hex values above are unchanged and correct, only the class names were
+wrong. Confirmed by generating `app/globals.css` and converting each `oklch()` value back to
+sRGB.
 
 **Green ramp** (chart series and the crop donut):
 `50 #e0faec` · `100 #d0fbe9` · `300 #84ebb4` · `500 #1fc16b` · `600 #1daf61` ·
@@ -214,9 +234,11 @@ under the gauge.
 "-0.6" at 14 px and "4" at 12 px, which are only sane as percentages. Confirm against the
 AlignUI generated scale; if they match, delete this note.]`
 
-`[VERIFY: "Inter Display" is a distinct optical size, not a Google Fonts family name. Confirm
-where it comes from — Google Fonts serves "Inter" only. Either use Inter's optical-size axis
-or self-host Inter Display from rsms.me/inter.]`
+**Resolved 2026-08-15 (`TASK-design-system-shell`) — "Inter Display."** `next/font/google`'s
+`Inter({ axes: ["opsz"] })` compiles and builds without error, so Google's Inter *does* ship an
+optical-size axis under Next.js's font loader. `Title/H5` gets Inter at its display optical
+size and the two families collapse to the one `--font-sans` variable
+(`apps/web/app/layout.tsx`) — no self-hosting from rsms.me needed.
 
 `[VERIFY: Plus Jakarta Sans appears on a single Label/Small instance. Confirm whether this is
 intentional or a stray override; if stray, it should be Inter.]`
@@ -269,9 +291,15 @@ chevron.
 The three Fields screens use a collapsed icon rail — icons only, plus a `FAVS` section of
 coloured dots (saved views), and no user name block. The map needs the width.
 
-`[VERIFY: is collapse a user toggle that persists, or is the rail forced on Fields? The
-expanded sidebar has a toggle control, which implies user choice — but all three Fields
-screens show it collapsed and no other screen does. Confirm intent.]`
+**Resolved 2026-08-15 (`TASK-design-system-shell`) — collapse is a user toggle, persisted.**
+`AppSidebar` takes a `collapsed: boolean` prop and knows nothing about routes; the state lives
+in a `flora_sidebar` cookie, read server-side in `app/(app)/layout.tsx` so first paint is
+already the correct width (no flash, no layout shift — NFR-10's CLS budget). The three Fields
+screens showing it collapsed is read as a **default for that route**, not a constraint the
+component enforces — flagged as its own open question in §9's gap table rather than built
+against, since Fields' data model doesn't exist yet (`TASK-fields`). The `FAVS` saved-views
+dot section is likewise out of scope until then — a decorative row of dots with no data is
+worse than its absence.
 
 ### 4.4 Split layouts (Fields)
 
@@ -519,13 +547,20 @@ It provides `ChartContainer`, `ChartTooltip`, `ChartTooltipContent`, `ChartLegen
    the file, so it must go first.
 2. Add the shadcn chart component, then **append only** the `--chart-1` … `--chart-5`
    variables to `globals.css`, mapped to the Flora green ramp (§3.3):
-   `--chart-1: var(--green-950)` … `--chart-5: var(--green-300)`.
+   `--chart-1: var(--color-green-950)` … `--chart-5: var(--color-green-300)`. Note the
+   `--color-` prefix — the AlignUI CLI emits Tailwind v4 `@theme` names (`--color-green-950`),
+   not the bare `--green-950` this document originally guessed.
 
 Do not let a shadcn theme generator rewrite the file — it will replace AlignUI's tokens with
 shadcn's own `--background`/`--foreground` set and every screen loses its palette.
 
-`[VERIFY: whether shadcn init can be run non-destructively, or whether components.json plus a
-hand-placed components/ui/chart.tsx is the safer route. Confirm before running either CLI.]`
+**Resolved 2026-08-15 (`TASK-design-system-shell`) — neither.** `pnpm dlx shadcn@latest add
+chart --dry-run --diff` doesn't touch `globals.css` in this project, but it also creates
+`components/ui/card.tsx` — an unwanted dependency (Flora has its own `Card`/`CardHeader`
+composite, §4.5). `chart.tsx` was fetched directly from `github.com/shadcn-ui/ui`
+(`apps/v4/registry/new-york-v4/ui/chart.tsx`) instead, with `components.json` hand-written
+(no `init` run) so `components/ui/**` aliases still resolve. See
+`apps/web/components/ui/SOURCES.md` for the exact commit and the one bug-fixed import path.
 
 **Recharts v3 token syntax:** reference chart tokens as `var(--chart-1)`, **not**
 `hsl(var(--chart-1))`. The wrapped form is everywhere in older shadcn examples and blog posts,
@@ -590,10 +625,11 @@ not extractions:
 | D7 | **Contrast**: `text-soft-400 #99a0ae` on white is **2.6:1** — below WCAG AA's 4.5:1 for body text. It is used for axis labels, units and coordinates. Either accept it for non-essential decoration only, or darken to `text-sub-600` where it carries meaning. |
 | D8 | **Carbon Offset** needs a design pass or formal removal (§2.2). |
 | D11 | **Home's KPI row** — two of three tiles have no data source. The proposed re-sourcing (§5.1, architecture §4.4) needs sign-off, including a new icon and label for the middle tile. |
-| D12 | **The sidebar at four entries** has more bottom whitespace than designed. Confirm whether the nav block stays top-aligned or the Settings/Support group moves up. |
+| D12 | **The sidebar at four entries** has more bottom whitespace than designed. **Answered the cheap way for now** (`TASK-design-system-shell`, 2026-08-15): the nav block stays top-aligned and Settings/Support stay bottom-pinned, exactly as the five-entry design has them — noted here, not designed around. Confirm with the designer if a rebalanced layout is wanted. |
 | D9 | `fancy/primary/default` still blue in Figma (§2.3). |
 | D10 | "Rain Chanse" typo (§5.6); "Pendent Tasks" should be "Pending Tasks"; "Specie Planted" should be "Species Planted"; "Energy Fonts" is likely a mistranslation of "Energy Sources" (*fontes*, PT). |
-| D13 | **No auth screens exist.** Login, forgot-password, and invite-acceptance are all undesigned — the screen inventory (§2) has none. `TASK-auth-tenancy` shipped a functional, unstyled login page (Tailwind only, no AlignUI) to prove the cookie flow; it gets restyled once these are designed. |
+| D13 | **No auth screens exist.** Login, forgot-password, and invite-acceptance are all undesigned — the screen inventory (§2) has none. `TASK-auth-tenancy` shipped a functional, unstyled login page (Tailwind only, no AlignUI) to prove the cookie flow. `TASK-design-system-shell` (2026-08-15) restyled it to AlignUI tokens (`Input`/`Label`/`Hint`/`Button` inside a `Card`) — same flow, same fetch, still not a *designed* screen. This gap closes only once login/forgot-password/invite-acceptance get real artboards. |
+| D14 | **Does Fields default to the collapsed sidebar rail?** §4.3's `[VERIFY]` resolved collapse to a user toggle, not a route constraint — `AppSidebar` takes a plain `collapsed` prop. The three Fields screens showing it collapsed reads as a *default*, not a rule the component enforces. If the designer confirms Fields should default collapsed on first visit, it's a one-line `defaultCollapsed` prop on `TASK-fields`'s layout, not a rework. |
 
 ---
 

@@ -588,7 +588,10 @@ There is no tile endpoint. Rasters are R2 URLs returned inline on the observatio
 ```
 apps/web/app/
 ├─ (auth)/login/page.tsx
-└─ (app)/                          ← layout.tsx renders Sidebar + PageHeader
+└─ (app)/                          ← layout.tsx renders AppSidebar; each screen
+                                      renders its own PageHeader (slot-based,
+                                      design-spec §6.2 — title/actions differ
+                                      per screen, so the shared shell can't own it)
    ├─ page.tsx                     Home                          [1:12913]
    ├─ fields/
    │  ├─ page.tsx                  list + map                    [1:35172]
@@ -862,7 +865,7 @@ everything else is sequenced by how directly it serves them.
 
 | Phase | Deliverable | Screens |
 |---|---|---|
-| **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell | shell |
+| **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell — **landed 2026-08-15** (`TASK-foundations`, `TASK-auth-tenancy`, `TASK-design-system-shell`); `TASK-domain-schema` still open | shell |
 | **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, import, crop cycles, growth/species/quantity, Mapbox list + map | `1:35172` |
 | **2 — Crop Stress** | `packages/satellite`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, detection review UI | `18:6567` |
 | **3 — Tasks** | Task domain scoped to fields, board with drag, list, timeline, watering volumes (§4.4) | `24:11420` |

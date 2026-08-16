@@ -3,12 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import type { FormEvent } from "react";
+import { RiPlantFill } from "@remixicon/react";
+import * as Button from "@/components/ui/button";
+import * as Input from "@/components/ui/input";
+import * as Label from "@/components/ui/label";
+import * as Hint from "@/components/ui/hint";
+import { Card } from "@/components/flora/card";
 
 /**
- * Plain form, Tailwind only — restyled once AlignUI lands in
- * TASK-design-system-shell (design-spec gap D13: no auth screen exists in
- * the Figma). Exists to prove the cookie flow in a real browser
- * (TASK-auth-tenancy §2.8, §6.14) before anything else is built on it.
+ * Token-correct restyle of the login form (TASK-design-system-shell §2.9).
+ * Same flow, same fetch, same error handling as the Tailwind-only version
+ * TASK-auth-tenancy shipped — this does not close design-spec gap D13 (login
+ * is still undesigned), it just removes the raw palette classes.
  */
 export default function LoginPage() {
   const router = useRouter();
@@ -39,48 +45,58 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center p-8">
-      <form onSubmit={onSubmit} className="w-full max-w-sm space-y-4">
-        <h1 className="text-xl font-semibold">Sign in to Flora</h1>
-        {error ? <p className="text-sm text-red-600">{error}</p> : null}
-        <div>
-          <label htmlFor="email" className="block text-sm font-medium">
-            Email
-          </label>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            autoComplete="email"
-            required
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-          />
+    <div className="flex w-full max-w-sm flex-col items-center gap-6">
+      <div className="flex items-center gap-2.5">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary-base text-static-white">
+          <RiPlantFill className="size-5" />
         </div>
-        <div>
-          <label htmlFor="password" className="block text-sm font-medium">
-            Password
-          </label>
-          <input
-            id="password"
-            name="password"
-            type="password"
-            autoComplete="current-password"
-            required
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            className="mt-1 w-full rounded border border-zinc-300 px-3 py-2"
-          />
-        </div>
-        <button
-          type="submit"
-          disabled={submitting}
-          className="w-full rounded bg-black px-3 py-2 text-white disabled:opacity-50"
-        >
-          {submitting ? "Signing in…" : "Sign in"}
-        </button>
-      </form>
+        <span className="text-label-lg text-text-strong-950">Flora™</span>
+      </div>
+
+      <Card className="w-full">
+        <form onSubmit={onSubmit} className="flex flex-col gap-4">
+          <h1 className="text-title-h6 text-text-strong-950">Sign in to Flora</h1>
+
+          <div className="flex flex-col gap-1.5">
+            <Label.Root htmlFor="email">Email</Label.Root>
+            <Input.Root hasError={!!error}>
+              <Input.Wrapper>
+                <Input.Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  required
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                />
+              </Input.Wrapper>
+            </Input.Root>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <Label.Root htmlFor="password">Password</Label.Root>
+            <Input.Root hasError={!!error}>
+              <Input.Wrapper>
+                <Input.Input
+                  id="password"
+                  name="password"
+                  type="password"
+                  autoComplete="current-password"
+                  required
+                  value={password}
+                  onChange={(event) => setPassword(event.target.value)}
+                />
+              </Input.Wrapper>
+            </Input.Root>
+            {error ? <Hint.Root hasError>{error}</Hint.Root> : null}
+          </div>
+
+          <Button.Root type="submit" disabled={submitting} className="w-full">
+            {submitting ? "Signing in…" : "Sign in"}
+          </Button.Root>
+        </form>
+      </Card>
     </div>
   );
 }

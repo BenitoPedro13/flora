@@ -22,23 +22,32 @@ Field Management follow. **Energy (`3:5920`) and Carbon Offset (`3:6566`) are de
 Energy sits off that loop and has no data source (architecture §4.3). Do not build against
 either without re-opening the decision.
 
-**Status (2026-08-15):** `TASK-foundations` (monorepo, infra, Drizzle+PostGIS skeleton) and
-`TASK-auth-tenancy` (identity, sessions, RLS enforced twice) have both landed. Email+password
-login with cookie sessions works end to end in a real browser; every tenant table is protected
-by the catalog test in `packages/db/src/queries/tenancy.spec.ts`. Next:
-`TASK-design-system-shell`, then the build spine. The retired prototype was deleted by
-`TASK-foundations` after tagging `prototype-v0`.
+**Status (2026-08-15):** `TASK-foundations` (monorepo, infra, Drizzle+PostGIS skeleton),
+`TASK-auth-tenancy` (identity, sessions, RLS enforced twice), and `TASK-design-system-shell`
+(AlignUI token chain, vendored base components, `AppSidebar`/`PageHeader`, the `(app)`/`(auth)`
+route groups, Playwright shell tests) have all landed. Email+password login with cookie
+sessions works end to end in a real browser, styled with AlignUI tokens; every tenant table is
+protected by the catalog test in `packages/db/src/queries/tenancy.spec.ts`. `/` still renders
+the one-line session sentence — inside the finished shell; no screen has been built yet. Next:
+`TASK-domain-schema`, then the build spine (`TASK-fields` → `TASK-crop-stress` →
+`TASK-tasks-board`). The retired prototype was deleted by `TASK-foundations` after tagging
+`prototype-v0`.
+
+**Corrected 2026-08-15 (`TASK-design-system-shell`):** design-spec §3.2 called the neutral
+colour "Gray" — it's **Slate**. AlignUI's Gray primitive is fully achromatic; the Figma's
+neutral hexes (`#0e121b` etc.) have a faint blue tint that converts exactly to AlignUI's Slate
+ramp. If a future task re-runs the AlignUI CLI from scratch, pick **Slate**, not Gray.
 
 **Decided 2026-08-15:** no AlignUI PRO seat. The five PRO blocks in the Figma
 (`Sidebar [Navigation]`, `Page Header`, `Widgets [HR Management]`, `Schedule Cards`,
 `File Upload Cards`) are **rebuilt from free base components** as Flora composites —
-design-spec §6.2 has the mapping. `AppSidebar` and `PageHeader` carry the real work and are
-first-class deliverables of `TASK-design-system-shell`, not afterthoughts.
+design-spec §6.2 has the mapping. `AppSidebar` and `PageHeader` (`components/flora/`) carry the
+real work and are built — 11 base components + `chart.tsx` are vendored in `components/ui/`
+with sources tracked in `components/ui/SOURCES.md`.
 
-Next up: `docs/tasks/TASK-design-system-shell.md` — AlignUI CLI, shadcn chart, `AppSidebar` and
-`PageHeader` rebuilt from free base components. Parallel with it (no file overlap except
-`.env.example`): `TASK-domain-schema`, which is blocked on `TASK-auth-tenancy`'s
-`packages/db/src/tenancy.ts` — every one of its tenant tables must go through it.
+Next up: `docs/tasks/TASK-domain-schema.md` (not yet written) — the Drizzle schema for fields,
+crops, tasks etc., blocked on `TASK-auth-tenancy`'s `packages/db/src/tenancy.ts` (every tenant
+table must go through it). After that, the build spine per architecture §16.
 
 ### Why the stack changed
 

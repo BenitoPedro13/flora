@@ -3,13 +3,16 @@
 An operations console for a regenerative farm — fields, crops, satellite-derived crop health,
 tasks, and weather.
 
-**Status:** Phase 0 foundations (`docs/tasks/TASK-foundations.md`) and identity/tenancy
-(`docs/tasks/TASK-auth-tenancy.md`) have landed — pnpm/Turborepo monorepo, Docker infra, a
-proven Drizzle+PostGIS skeleton, email+password login with cookie sessions, and row-level
-security enforced twice (repository filter + Postgres RLS) for every tenant table.
-`TASK-design-system-shell` is next, followed by the build spine (Fields & Crops → Crop Stress
-→ Tasks). See `docs/architecture.md` (system, v2) and `docs/design-spec.md` (visual) for the
-full picture — `CLAUDE.md` for how work happens in this repo.
+**Status:** Phase 0 foundations (`docs/tasks/TASK-foundations.md`), identity/tenancy
+(`docs/tasks/TASK-auth-tenancy.md`), and the design-system shell
+(`docs/tasks/TASK-design-system-shell.md`) have landed — pnpm/Turborepo monorepo, Docker infra,
+a proven Drizzle+PostGIS skeleton, email+password login with cookie sessions, row-level
+security enforced twice (repository filter + Postgres RLS) for every tenant table, and the
+AlignUI token chain + `AppSidebar`/`PageHeader` shell every screen renders into. `/` still
+renders the session sentence — inside the finished shell. Next: `TASK-domain-schema`, then the
+build spine (Fields & Crops → Crop Stress → Tasks). See `docs/architecture.md` (system, v2)
+and `docs/design-spec.md` (visual) for the full picture — `CLAUDE.md` for how work happens in
+this repo.
 
 ## Stack
 
@@ -52,6 +55,7 @@ Log in at `localhost:3000/login` with the seeded credentials `pnpm db:seed` prin
 | `pnpm db:studio` | Drizzle Studio against the local database |
 | `pnpm db:spike` | Re-run the PostGIS round-trip proof (architecture.md §5.2) |
 | `pnpm db:seed` | Create the first organization + owner login, if one doesn't exist yet |
+| `pnpm --filter web test:e2e` | Playwright shell tests (`apps/web/e2e/`) — needs `apps/api` + infra running and `pnpm db:seed`; run `pnpm --filter web exec playwright install chromium` once first |
 
 More detail on the infra stack, including why the local `db` image differs from CI's, is in
 `infra/README.md`.
