@@ -5,3 +5,4 @@ export * from "./field.js";
 export * from "./observation.js";
 export * from "./stress.js";
 export * from "./task.js";
+export * from "./rollup.js";

@@ -29,6 +29,13 @@
       "when": 1786890914922,
       "tag": "0008_add_task_water_volume",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1786897316457,
+      "tag": "0009_rollups",
+      "breakpoints": true
     }
   ]
 }

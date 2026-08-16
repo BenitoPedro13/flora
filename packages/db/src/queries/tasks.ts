@@ -36,7 +36,7 @@ export interface TaskRecord {
   waterVolumeM3: number | null;
 }
 
-interface TaskRow {
+export interface TaskRow {
   [key: string]: unknown;
   id: string;
   title: string;
@@ -56,7 +56,8 @@ interface TaskRow {
   water_volume_m3: string | null;
 }
 
-function toTaskRecord(row: TaskRow): TaskRecord {
+/** Exported for `rollups.ts`'s Pending Tasks read (§2.8) — one projection, never re-derived. */
+export function toTaskRecord(row: TaskRow): TaskRecord {
   return {
     id: row.id,
     title: row.title,
@@ -76,8 +77,8 @@ function toTaskRecord(row: TaskRow): TaskRecord {
   };
 }
 
-/** Shared by `listBoard` and `getTask` — one projection, never re-derived per caller. */
-const TASK_PROJECTION_SQL = sql`
+/** Shared by `listBoard`, `getTask`, and `rollups.ts`'s Pending Tasks read — one projection, never re-derived per caller. */
+export const TASK_PROJECTION_SQL = sql`
   SELECT
     t.id, t.title, t.description, t.status, t.activity, t.progress_pct,
     t.starts_on, t.due_on, t.position, t.water_volume_m3,

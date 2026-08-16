@@ -97,10 +97,10 @@ describe("tenancy", () => {
       }
     });
 
-    it("has exactly the two named SECURITY DEFINER functions (TASK-satellite-pipeline §2.4) — an allowlist, not a count", async () => {
-      // Was `expect(count).toBe(1)` before TASK-satellite-pipeline added
-      // scheduler_fields_due_for_refresh. A named allowlist is a strictly
-      // better guard than a count: it still fails if a *third* SECURITY
+    it("has exactly the three named SECURITY DEFINER functions (TASK-home-dashboard §2.9) — an allowlist, not a count", async () => {
+      // Was a two-entry allowlist before TASK-home-dashboard added
+      // scheduler_farms_due_for_rollup. A named allowlist is a strictly
+      // better guard than a count: it still fails if a *fourth* SECURITY
       // DEFINER function appears anywhere, but for a different, legible
       // reason than "the number changed" — and it independently asserts
       // each function's own scope stays ids-only.
@@ -109,8 +109,34 @@ describe("tenancy", () => {
          WHERE prosecdef AND pronamespace = 'public'::regnamespace`,
       );
       expect(rows.map((r) => r.proname).sort()).toEqual(
-        ["auth_memberships_for_user", "scheduler_fields_due_for_refresh"].sort(),
+        ["auth_memberships_for_user", "scheduler_fields_due_for_refresh", "scheduler_farms_due_for_rollup"].sort(),
       );
+    });
+
+    it("the three TASK-home-dashboard rollup tables exist and are RLS-protected (§6 item 10)", async () => {
+      const rollupTables = ["farm_daily_rollups", "farm_scores", "weather_snapshots"];
+      const { rows } = await owner.pool.query<{ relname: string; relrowsecurity: boolean }>(
+        `SELECT relname, relrowsecurity FROM pg_class
+         WHERE relnamespace = 'public'::regnamespace AND relname = ANY($1)`,
+        [rollupTables],
+      );
+      expect(rows.map((r) => r.relname).sort()).toEqual([...rollupTables].sort());
+      for (const row of rows) {
+        expect(row.relrowsecurity).toBe(true);
+      }
+    });
+
+    it("scheduler_farms_due_for_rollup returns ids and a timezone only — nothing a leak would be interesting about", async () => {
+      const { rows } = await owner.pool.query<{ column_name: string }>(
+        `SELECT p.parameter_name AS column_name
+         FROM information_schema.parameters p
+         JOIN information_schema.routines r
+           ON r.specific_name = p.specific_name AND r.specific_schema = p.specific_schema
+         WHERE r.routine_name = 'scheduler_farms_due_for_rollup' AND r.routine_schema = 'public'
+           AND p.parameter_mode = 'OUT'
+         ORDER BY p.ordinal_position`,
+      );
+      expect(rows.map((r) => r.column_name)).toEqual(["organization_id", "farm_id", "timezone"]);
     });
 
     it("scheduler_fields_due_for_refresh returns ids and a timezone only — nothing a leak would be interesting about", async () => {

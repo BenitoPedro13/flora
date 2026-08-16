@@ -26,3 +26,13 @@ export function formatAcres(m2: number): string {
 export function formatTonnes(kg: number): string {
   return `${kilogramsToTonnes(kg).toFixed(1)} T`;
 }
+
+/**
+ * 1 m³ = 1 kL exactly — a rename for display, never a conversion
+ * (TASK-home-dashboard §7 decision 1). `tasks.water_volume_m3` stays the
+ * canonical SI column; kilolitres is only how the Water Used KPI tile
+ * labels the same number.
+ */
+export function formatKiloliters(m3: number): string {
+  return `${m3.toFixed(1)} kL`;
+}
