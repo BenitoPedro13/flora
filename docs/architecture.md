@@ -814,6 +814,29 @@ and Process endpoint (`sh.dataspace.copernicus.eu/api/v1/process`) were confirme
 own current docs by that task, distinct from the pre-CDSE `services.sentinel-hub.com` host an
 older guide would suggest.
 
+**Unresolved, found 2026-08-16 (`TASK-crop-stress` §9, against a real account for the first
+time) — re-open before `TASK-satellite-live` ships:**
+
+1. **The Process endpoint's own docs page
+   (`documentation.dataspace.copernicus.eu/APIs/SentinelHub/Process/Examples/S2L1C.html`)
+   consistently shows the base URL as `sh.dataspace.copernicus.eu/process/v1`**, not
+   `.../api/v1/process` as coded and as this section states above. Not independently confirmed
+   which is correct — the discrepancy could be the docs page (rendered via a summarizing fetch,
+   not read raw) or the code. Cheap to settle: hit both directly with a real token and see which
+   one 404s.
+2. **`fetchIndexRaster` (`packages/satellite/src/cdse/process.ts`) always requests two named
+   outputs (`index`, `scl`) and calls `res.formData()` on the response, expecting
+   `multipart/form-data`.** The same docs page's multi-output example sends
+   `Accept: application/tar` and states the response is a **TAR archive** for more than one
+   `output.responses[]` entry — not multipart at all. If that's right, every real refresh with
+   the current code either fails outright or silently mis-parses. `packages/satellite` has no
+   tar-parsing dependency yet.
+
+Neither item is fixed — `packages/satellite` is `TASK-satellite-pipeline`'s landed code, this
+finding surfaced from `TASK-crop-stress` (a different task) pointing a real CDSE account at it
+for the first time, and confirming a fix needs testing against that same real account, which the
+session that found this didn't have write access to verify with.
+
 ### 11.2 Mapbox
 
 Free tier, verified: **50,000 map loads/month** (a load = one GL JS initialisation, including
