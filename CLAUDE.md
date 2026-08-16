@@ -38,18 +38,21 @@ map toolbar's locate/measure/zoom, the grouped detection list, the popover and i
 mutations, the manual-refresh poll, NFR-8's stale badge), and `TASK-satellite-live` (the fix that
 made the CDSE round trip actually work against a real account — `packages/satellite/src/cdse/process.ts`
 now sends `Accept: application/tar` and extracts named TAR members instead of calling
-`res.formData()` on a bare TIFF), and `TASK-tasks-board` (Phase 3, `24:11420` — the third and
-last link of the spine) have all landed. **Phases 0 through 3 are complete**; Phase 4
-(`TASK-home-dashboard`) is next.
+`res.formData()` on a bare TIFF), `TASK-tasks-board` (Phase 3, `24:11420` — the third and
+last link of the spine), and `TASK-home-dashboard` (Phase 4, `1:12913` — the first screen that
+reads across every domain instead of owning one) have all landed. **Phases 0 through 4 are
+complete**; Phase 5 (`TASK-weather`) is next.
 Email+password login with cookie sessions works end to end in a real browser, styled with
 AlignUI tokens; every tenant table is protected by the catalog test in
-`packages/db/src/queries/tenancy.spec.ts`, now a named allowlist of **two** SECURITY DEFINER
-functions (`auth_memberships_for_user`, `scheduler_fields_due_for_refresh`). `/fields` renders
+`packages/db/src/queries/tenancy.spec.ts`, now a named allowlist of **three** SECURITY DEFINER
+functions (`auth_memberships_for_user`, `scheduler_fields_due_for_refresh`,
+`scheduler_farms_due_for_rollup`). `/fields` renders
 the four demo field cards (pixel-matched against the Figma), the Mapbox satellite map, the field
 editor, and GeoJSON import — all exercised live in a browser and by `apps/web/e2e/fields.spec.ts`;
 **View Details** now navigates to `/fields/[fieldId]/stress` instead of opening the editor, whose
 second entry point is double-clicking the card (`TASK-crop-stress` §2.12), mirroring the map
-polygon's own double-click gesture. `/` still renders the one-line session sentence. Real
+polygon's own double-click gesture. `/` is now the real Home screen (`TASK-home-dashboard`),
+not the one-line session sentence — see below. Real
 `observations` and `stress_zones` rows exist for the demo fields via `db:seed:satellite`, which
 replays a synthetic-but-known raster through the real pipeline (`packages/raster`), and now also
 via the real thing: `TASK-satellite-live` got real CDSE credentials working end to end — a manual
@@ -87,7 +90,36 @@ regardless of where an org's real fields actually are (now derived from the org'
 centroids); and `POST /api/v1/auth/refresh` existed on the API since `TASK-auth-tenancy` but
 nothing in `apps/web` ever called it, so every session died with the access token's 15-minute
 TTL instead of the refresh token's real 30-day one — a `SessionRefresher` client component now
-renews it silently every 10 minutes. Next: `TASK-home-dashboard` (Phase 4).
+renews it silently every 10 minutes. `TASK-home-dashboard` (Phase 4, `1:12913`) closes it out:
+three new tables (`farm_daily_rollups`, `farm_scores`, `weather_snapshots`), a new
+`packages/weather` package (an `OpenMeteoProvider` mirroring `packages/satellite`'s shape —
+`[VERIFY]`s on parameter names resolved against Open-Meteo's current docs and a real captured
+response, CC-BY 4.0, keyless), `GET /farms/:id/dashboard` (computing on a rollup miss rather
+than a "pending" state), a daily worker rollup job and an hourly weather-ingest job, and the
+screen itself — four Recharts components and six new `components/flora/` composites. The
+Regeneration Score closes architecture §17 Q2 with a real, sourced formula (AAFC's
+agri-environmental performance index over Soil Cover Days, Shannon evenness and stress-free
+area share — `packages/db/src/scoring/regeneration.ts`) instead of the invented composite
+architecture §5.4 originally proposed. Several defects surfaced live, comparing the running
+screen against the real Figma export and real seeded data rather than by inspection: two
+historical crop-cycle offsets closer together than their cycle length silently double-counted
+a field's area in Planting Productivity, caught by the write path's own schema validation on
+write, not observed by eye; a shadcn chart tooltip used shadcn's own `bg-background` token
+(undefined in AlignUI's theme, fully transparent) and then a *semantic* token
+(`--color-bg-strong-950`) that inverts in dark mode, instead of the theme-invariant
+`--color-static-*` pair; Gathering Rate's tooltip reliably landed on a zero value because 26
+weekly categories in a ~303px chart gave the 1–2 weeks with real data an ~11px hover target,
+fixed by re-bucketing to six monthly columns; and `CropsStockedCard`'s donut/legend divider
+needed one shared CSS grid (not a flex row with a gap) plus explicit per-cell
+border-right/-bottom (Tailwind's `divide-x`/`divide-y` don't understand a 2D grid's row/column
+boundaries). Playwright's `mask` option was tried and reverted for the NFR-10 screenshot test:
+it only paints the *live* page before capturing, never the stored baseline, so it can't
+suppress diff noise against an external, un-doctored Figma export the way it incidentally does
+for `shell.spec.ts`'s small sidebar-identity mask — the real measured floor (9%, real per-farm
+data against the mock's illustrative numbers) is recorded with headroom instead, the same
+"measured floor, not silently loosened" precedent `shell.spec.ts` §10 already set. Next:
+`TASK-weather` (Phase 5) — the ingest already stores the full 7-day/wind/UV/pressure/
+sunrise-sunset payload Home doesn't read.
 The retired prototype was deleted by `TASK-foundations` after tagging `prototype-v0`;
 `geo_spike`, the schema spike that proved the PostGIS/Drizzle round-trip, was retired by
 `TASK-domain-schema` once `fields` landed.

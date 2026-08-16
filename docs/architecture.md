@@ -181,16 +181,19 @@ completes turns irrigation into a by-product of work the farmer is already loggi
 The layout is unchanged — three tiles plus the Crops Stocked donut, exactly as designed. Only
 the middle tile's label, icon and source change.
 
-`[VERIFY: confirm the swap with the design owner. If Energy Generated must stay on Home, it
-needs a manual-entry path, which pulls a slice of §11.4 back into scope.]`
+~~`[VERIFY: confirm the swap with the design owner...]`~~ — **RESOLVED 2026-08-16
+(`TASK-home-dashboard` §7 decision 1, closing Q3):** the swap is taken as written above — Fields
+at Risk replaces Energy Generated (`alert-fill` icon, no unit suffix), Water Used is re-sourced
+from `tasks.water_volume_m3` over a **trailing 30 days**, and Crops Stocked is **harvested**
+volume over a trailing 12 months (§7 decision 4 of that task), not standing crop. Deltas are
+**week-over-week**, surfaced in each tile's info tooltip alongside the rollup's own `day`
+(NFR-8's stale-badge pattern). Layout is unchanged — three tiles plus the Crops Stocked donut.
 
 **Corrected 2026-08-16 (`TASK-tasks-board` §2.3):** **Water Used** now has a real column to
 read — `tasks.water_volume_m3`, nullable, meaningful only when `activity = 'watering'`, added
 this task specifically so Phase 4 finds data already accumulating rather than shipping a
 migration and retrofitting a form into a screen it doesn't own. The design shows no such field
-anywhere on `24:11420`; its placement in `TaskEditor` is invented (design-spec D20). The swap
-itself still needs the design owner's sign-off — this only closes the "no source" half of the
-`[VERIFY]` above, not the whole thing.
+anywhere on `24:11420`; its placement in `TaskEditor` is invented (design-spec D20).
 
 ---
 
@@ -339,11 +342,57 @@ meaningful only when `activity = 'watering'`; §4.4's Water Used tile reads it o
 (§4.3). Recorded here so the shape is settled when the screen returns; the hour × weekday
 heatmap is a `date_trunc('hour')` aggregate over readings.
 
-**`weather_snapshots`** — `(farm_id, observed_at, horizon)` + JSONB payload. `horizon`
-separates an actual from a forecast for the same timestamp, so forecast accuracy stays
-measurable.
+**`weather_snapshots`** — **created 2026-08-16 (`TASK-home-dashboard` §2.1/§2.6).**
+`(organization_id, farm_id, observed_at, horizon)` + JSONB `payload`. `observed_at` is the
+ingestion run's own timestamp, not the forecast's target date; `horizon` (`"0"`–`"7"`, days
+ahead) plus `observed_at` locates a calendar day. One hourly worker job writes 8 rows per
+farm per run (Open-Meteo's `forecast_days=8`); Home reads only `horizon IN ('0', '1')`
+(today/tomorrow) of the same stored payload the Phase 5 Weather screen will read in full.
+
+**`farm_daily_rollups`** — **created 2026-08-16.** `(organization_id, farm_id, day)` + JSONB
+`payload` holding everything `buildFarmRollup` computes once a day: Crops Stocked, Fields at
+Risk, Water Used, Planting Productivity, Gathering Rate. One row per farm per day, upserted —
+idempotent by construction. Built by a daily worker job 30 minutes after the satellite wave,
+or inline on a cache miss by the dashboard endpoint itself (§7.6, §8.3).
+
+**`farm_scores`** — **created 2026-08-16.** `(organization_id, farm_id, computed_on)` +
+`score numeric`, `class text`, `components jsonb`, `formula_version text`. Never overwritten —
+one row per computed day, so a formula version change is visible in the data, not just in git.
+See §5.4.
 
 ### 5.4 The Regeneration Score
+
+**Resolved 2026-08-16 (`TASK-home-dashboard` §2.4, closing Q2).** Home's gauge reads a real,
+sourced number — not the invented weighted mean this section originally proposed (below, kept
+struck through as the record of what was rejected and why).
+
+The score is **Agriculture and Agri-Food Canada's own agri-environmental performance index**:
+0–100 in five 20-point classes (At risk · Poor · Moderate · Good · Desired), over three
+components, each normalised 0–100 and area-weighted across the farm's fields:
+
+| # | Component | Weight | Source |
+|---|---|---|---|
+| 1 | **Soil cover** | 0.50 | AAFC's **Soil Cover Days** indicator, computed from the NDVI time series via the dimidiate pixel model (Gutman & Ignatov 1998, linear form) — trapezoid-integrated fractional cover between consecutive observations over the trailing 365 days |
+| 2 | **Crop diversity** | 0.25 | Normalised **Shannon evenness** over crop rotation in the trailing 3 years, area-weighted |
+| 3 | **Vegetation health** | 0.25 | Share of field area free of unmuted, non-deleted `stress_zones` — Flora's own Phase 2 output |
+
+Only the three **weights** are Flora's own, and are labelled as such — the components and their
+normalisations are published, cited in `TASK-home-dashboard.md` §2.4. A missing component
+renormalises the remaining weights rather than scoring zero (a thin-data farm is not punished
+for a gap in observation). `packages/db/src/scoring/regeneration.ts` exports
+`REGENERATION_FORMULA_VERSION` and a pure `computeRegenerationScore`, stored in `farm_scores`
+with that version string on every row. Two stated limitations, on the card, not buried: Flora
+sees canopy cover only (AAFC's SCD also counts residue and snow), and the dimidiate model's
+`NDVI_soil`/`NDVI_veg` endpoints are the conventional 0.15/0.85, not per-crop calibrated
+(`[VERIFY: confirm against a Sentinel-2 source before the next formula revision]`).
+
+**Deviation from the proposal below:** lives in `packages/db/src/scoring/`, not
+`apps/worker/src/scoring/` — the dashboard endpoint recomputes on a rollup miss (§7.6, §8.3),
+so the function needs to be callable from both the worker and the API, the same situation
+`packages/raster/src/detect.ts` already resolved for the satellite pipeline's worker/seed pair.
+
+<details>
+<summary>Rejected proposal (pre-2026-08-16) — kept for the record</summary>
 
 Home shows a gauge reading **95**, with a secondary **86**. No formula exists in the design.
 
@@ -353,9 +402,13 @@ versioned function in `apps/worker/src/scoring/`. Proposed — to be signed off,
 a weighted mean of three normalised components: mean NDVI against the crop's expected curve,
 share of field area free of stress zones, and water use per tonne against baseline. (A fourth
 — share of energy from regenerative sources — is dropped with the Energy screen, §4.3.)
-`[VERIFY: confirm the intended definition before Phase 4. If it stays undefined, ship the
-gauge reading a single component (stress-free area share) and label it honestly rather than
-shipping a fabricated composite.]`
+
+Rejected 2026-08-16: the other two components each needed an invented baseline wearing a
+plausible face — an expected-NDVI curve per crop nobody has, and a water-per-tonne baseline
+needing a season of history no farm has yet. The published AAFC/Shannon composite above needs
+neither.
+
+</details>
 
 ---
 
@@ -544,9 +597,15 @@ note on this).
 
 ### 7.6 Aggregation for Home
 
-Home reads one materialised row per farm per day — `farm_daily_rollups (farm_id, day, payload
-jsonb)` — rebuilt by a job after the satellite refresh completes. Home therefore issues one
-query. Building it from six live aggregates would make the most-visited screen the slowest.
+**Corrected 2026-08-16 (`TASK-home-dashboard` §2.8): three queries, not one.** Home reads one
+materialised row per farm per day — `farm_daily_rollups (organization_id, farm_id, day,
+payload jsonb)` — rebuilt by a daily worker job 30 minutes after the satellite wave, or built
+inline on a cache miss (a farm's first-ever login). That's right for six of the seven widgets,
+but **wrong for Pendent Tasks**: a task completed at 09:00 would keep showing as pending until
+tomorrow's rollup. The endpoint is one rollup read (+ its 7-day-old sibling, for the KPI
+deltas), one live indexed read of the task queue head, and one live read of the latest
+`weather_snapshots` row — two of the three are single index lookups, and the rollup itself is
+still what keeps six live aggregates off the hot path.
 
 ---
 
@@ -597,7 +656,9 @@ POST   /api/v1/auth/login | logout | refresh
 GET    /api/v1/me
 
 GET    /api/v1/farms
-GET    /api/v1/farms/:id/dashboard              → farm_daily_rollups payload (Home)
+GET    /api/v1/farms/:id/dashboard              → Home's payload (§7.6) — built 2026-08-16 (`TASK-home-dashboard`)
+                                                   /farms/:id/weather (the Phase 5 screen's route) is not yet
+                                                   built — the ingest (§11.3) is, and stores more than Home reads
 
 GET    /api/v1/crops
 POST   /api/v1/crops                            the field editor's inline "add species"
@@ -866,12 +927,23 @@ API — so this choice is reversible at low cost.
 
 Covers every value on the Weather screen with no API key: 7-day forecast, hourly wind speed
 and direction, UV index, precipitation probability, sunrise/sunset, surface pressure.
-`[VERIFY: exact parameter names for uv_index, surface_pressure, precipitation_probability and
-daily sunrise/sunset, plus licence terms for the intended deployment.]`
 
-Polled hourly per farm by a repeatable job, persisted to `weather_snapshots`. The browser
-never calls the provider — that would leak farm coordinates from the client and make the
-screen unrenderable from cache.
+~~`[VERIFY: exact parameter names...]`~~ — **RESOLVED 2026-08-16 (`TASK-home-dashboard` §2.6),
+against Open-Meteo's current docs and a real captured response** (the base is
+`https://api.open-meteo.com/v1/forecast`; `packages/weather/test/fixtures/` holds the capture).
+The `daily=` parameter names are `temperature_2m_max`, `temperature_2m_min`, `weather_code`
+(not the older `weathercode`), `precipitation_sum`, `wind_speed_10m_max` (not
+`windspeed_10m_max`), `uv_index_max`, `sunrise`, `sunset`. No API key for non-commercial use;
+**licence is CC-BY 4.0 attribution**, free tier capped at 10,000 calls/day · 5,000/hour ·
+600/minute — far above the one hourly call per farm this needs.
+
+Polled hourly per farm by a repeatable worker job (`apps/worker/src/weather/`), persisted to
+`weather_snapshots` via `packages/weather`'s `OpenMeteoProvider` — mirrors
+`packages/satellite`'s shape (a provider interface, a fixture implementation for tests). The
+browser never calls the provider — that would leak farm coordinates from the client and make
+the screen unrenderable from cache. Home reads only today/tomorrow's temperature and weather
+code from the stored payload; the full 7-day/wind/UV/pressure/sunrise-sunset data is ingested
+and stored but unread until the Phase 5 Weather screen.
 
 ### 11.4 Energy — deferred (§4.3)
 
@@ -998,7 +1070,7 @@ everything else is sequenced by how directly it serves them.
 | **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, GeoJSON import, crop cycles, growth/species/quantity, Mapbox list + map — **landed 2026-08-16** (`TASK-fields`) — **complete** (KML/Shapefile import still open, `TASK-fields-import`) | `1:35172` |
 | **2 — Crop Stress** | **Split 2026-08-16 (`TASK-satellite-pipeline` §1.1) into two tasks.** `TASK-satellite-pipeline`: `packages/satellite` + `packages/raster`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, six endpoints — no screen, **landed 2026-08-16** (offline-development seam: `db:seed:satellite` makes the next task buildable with no CDSE credentials). `TASK-crop-stress`: `18:6567` itself — the raster overlay, colour-ramp legend, detection list/popover, date picker, mute/classify/delete, the manual-refresh poll endpoint, NFR-8's stale badge — **landed 2026-08-16** — **complete** (the live CDSE round trip is still open, `TASK-satellite-live`) | `18:6567` |
 | **3 — Tasks** | Task domain scoped to fields, board with drag, watering volumes (§4.4) — **landed 2026-08-16** (`TASK-tasks-board`) — **complete** (List/Timeline still undesigned, design-spec D4; `TASK-tasks-views` picks them up once they are) | `24:11420` |
-| **4 — Home** | Rollups, scoring, re-sourced KPI row (§4.4), all Home widgets | `1:12913` |
+| **4 — Home** | Rollups, scoring, re-sourced KPI row (§4.4), all Home widgets — **landed 2026-08-16** (`TASK-home-dashboard`) — **complete**. Q2 (§17) closed against published indicators (§5.4); Q3 closed (§4.4). NFR-1's TTFB/LCP numbers are unmeasured (recorded, not assumed); NFR-10's home.png diff measured 9% real-content-vs-mock (not 2% — masking doesn't work against an external Figma baseline for a screen this data-dense, `apps/web/e2e/home.spec.ts`'s own comment has the full reasoning), threshold set to 12% with the same "measured floor" precedent `TASK-design-system-shell`'s sidebar tests already established | `1:12913` |
 | **5 — Weather** | Open-Meteo ingest + console | `3:5274` |
 | **6 — Management** | Zones, prescriptions, scenarios | `15:8608` |
 | **deferred** | **Energy** — off the farmer's loop, no data source (§4.3) | `3:5920` |
@@ -1019,8 +1091,8 @@ computes yet (§17 Q4).
 | # | Question | Blocks |
 |---|---|---|
 | ~~Q1~~ | ~~AlignUI PRO licence~~ — **RESOLVED 2026-08-15: no PRO seat.** The five PRO blocks are rebuilt from free base components as Flora composites (design-spec §6.2). | — |
-| Q2 | The Regeneration Score formula (§5.4) | Phase 4 |
-| Q3 | Home's KPI row re-sourcing — confirm the Fields at Risk / Water Used swap (§4.4) | Phase 4 |
+| ~~Q2~~ | ~~The Regeneration Score formula (§5.4)~~ — **RESOLVED 2026-08-16.** Published AAFC performance index over Soil Cover Days, Shannon evenness and stress-free area share, not an invented composite. Full definition in §5.4. | — |
+| ~~Q3~~ | ~~Home's KPI row re-sourcing~~ — **RESOLVED 2026-08-16.** Fields at Risk / Water Used swap taken as proposed, Crops Stocked defined as harvested volume trailing 12 months (§4.4). | — |
 | ~~Q4~~ | ~~Stress-zone thresholds~~ — **RESOLVED 2026-08-15.** Relative (p10) thresholds, 0.5 ac min, **4 ac max**, 10 m edge buffer, ≥70% clear scene. Full rules in §7.6. | — |
 | ~~Q5~~ | ~~Units~~ — **RESOLVED 2026-08-15: acres + metric tonnes, fixed.** Store SI, convert at the edge (§5.3). | — |
 | ~~Q6~~ | ~~Social login~~ — **RESOLVED 2026-08-15: no.** Email + password (argon2id), backend-owned identity (§10). Farm staff frequently have no work-linked Google account, and an external IdP would split identity from the tenancy model that lives in Postgres. Revisit only if an org asks for SSO. | — |

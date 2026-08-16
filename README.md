@@ -3,14 +3,15 @@
 An operations console for a regenerative farm — fields, crops, satellite-derived crop health,
 tasks, and weather.
 
-**Status:** Phases 0 through 3 are complete. Foundations
+**Status:** Phases 0 through 4 are complete. Foundations
 (`docs/tasks/TASK-foundations.md`), identity/tenancy (`docs/tasks/TASK-auth-tenancy.md`), the
 design-system shell (`docs/tasks/TASK-design-system-shell.md`), the domain schema
 (`docs/tasks/TASK-domain-schema.md`), Fields & Crops (`docs/tasks/TASK-fields.md`), the
 satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`), the Crop Stress
 screen (`docs/tasks/TASK-crop-stress.md`), the live CDSE round-trip fix
-(`docs/tasks/TASK-satellite-live.md`), and the Tasks board
-(`docs/tasks/TASK-tasks-board.md`) have all landed:
+(`docs/tasks/TASK-satellite-live.md`), the Tasks board
+(`docs/tasks/TASK-tasks-board.md`), and Home (`docs/tasks/TASK-home-dashboard.md`) have all
+landed:
 pnpm/Turborepo monorepo, Docker infra, the ten domain tables (farms, crops, fields, crop_cycles,
 observations, stress_zones, tasks + its three children) with composite foreign keys and RLS,
 email+password login with cookie sessions, row-level security enforced twice (repository filter
@@ -32,10 +33,15 @@ against a real account and writes a real observation. `/tasks` (`24:11420`) clos
 a Kanban board over the task domain — five `apps/api` endpoints, server-computed drag positions
 (`PATCH /tasks/:id/move`), and `tasks.water_volume_m3` sourcing Phase 4's Water Used tile. List
 and Timeline views and Import ship disabled (undesigned); the board's own NFR-10 baseline is a
-real Figma export this environment could finally reach. `/` still renders the session sentence.
-Next: Home (`TASK-home-dashboard`, Phase 4) — the "create a task from this stress zone" action
-on the Crop Stress popover is `TASK-stress-to-task`'s entry point, buildable now that Tasks has
-a create path.
+real Figma export this environment could finally reach. `/` (`1:12913`) now renders the real
+Home screen — the KPI row, Crops Stocked donut, Regeneration Score (a real published-indicator
+formula, not an invented composite — architecture §5.4), Planting Productivity, Weather, real
+top-crop Gathering Rate, and live Pending Tasks — reading a new daily rollup (`buildFarmRollup`,
+computed by a worker job or inline on a farm's first-ever login) plus a new `packages/weather`
+Open-Meteo ingest. Next: Weather (`TASK-weather`, Phase 5) — the write path already stores the
+full 7-day forecast Home doesn't read; the "create a task from this stress zone" action on the
+Crop Stress popover is `TASK-stress-to-task`'s entry point, buildable since Tasks has a create
+path.
 See `docs/architecture.md` (system, v2) and
 `docs/design-spec.md` (visual) for the full picture — `CLAUDE.md` for how work happens in this
 repo.
@@ -54,8 +60,10 @@ Prerequisites: Node 24+, pnpm, Docker.
 cp .env.example .env   # fill in placeholders; see infra/README.md for the local ones
 pnpm setup              # install deps, start infra, run migrations
 pnpm db:seed             # first organization + owner login (owner@flora.local), one farm, four crops
-pnpm db:seed:demo        # four demo fields matched to the Fields screen's Figma cards — optional
-pnpm db:seed:satellite   # observations + stress zones for the demo fields, via the real pipeline — optional, run after db:seed:demo
+pnpm db:seed:demo        # four demo fields (or 12mo harvested history backfilled onto your own, if any exist) — optional
+pnpm db:seed:satellite   # a year of observations + stress zones, via the real pipeline — optional, run after db:seed:demo
+pnpm db:seed:rollups     # the real buildFarmRollup for the trailing 30 days — optional, run after db:seed:satellite
+pnpm db:seed:weather     # one real Open-Meteo call per farm — optional
 pnpm dev                 # apps/web on :3000, apps/api on :3001, apps/worker standalone
 ```
 
@@ -82,8 +90,10 @@ Log in at `localhost:3000/login` with the seeded credentials `pnpm db:seed` prin
 | `pnpm db:generate` | `drizzle-kit generate` — always review the output before committing |
 | `pnpm db:studio` | Drizzle Studio against the local database |
 | `pnpm db:seed` | Create the first organization, owner login, farm, and crops, if they don't exist yet |
-| `pnpm db:seed:demo` | Add four demo fields matched to the Fields screen's Figma cards — run after `db:seed` |
-| `pnpm db:seed:satellite` | Replay a synthetic-but-known raster through the real pipeline into `observations`/`stress_zones` for the demo fields — run after `db:seed:demo`; needs no CDSE credentials |
+| `pnpm db:seed:demo` | Add four demo fields matched to the Fields screen's Figma cards if the org has none yet; either way, backfill 12 months of harvested crop-cycle history onto whatever fields the org actually has (idempotent per cycle) — run after `db:seed` |
+| `pnpm db:seed:satellite` | Replay a year of a synthetic-but-known seasonal raster through the real pipeline into `observations`/`stress_zones`, on Sentinel-2's real ~5-day revisit cadence — run after `db:seed:demo`; needs no CDSE credentials |
+| `pnpm db:seed:rollups` | Replay the real `buildFarmRollup` for the trailing 30 days — what makes Home's KPI deltas real numbers instead of a first-login build; run after `db:seed:satellite` |
+| `pnpm db:seed:weather` | One real, keyless Open-Meteo call per farm — gives Home's Weather card real data without waiting on the hourly worker schedule |
 | `pnpm db:seed:bulk` | Add 200 more fields on a grid (pagination and NFR-11 fixtures) — run after `db:seed` |
 | `pnpm --filter web test:e2e` | Playwright e2e tests (`apps/web/e2e/`) — needs `apps/api` + infra running and `pnpm db:seed && pnpm db:seed:demo`; run `pnpm --filter web exec playwright install chromium` once first |
 

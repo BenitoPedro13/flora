@@ -19,9 +19,15 @@ import { test, expect, type Page } from "@playwright/test";
 
 const CREDENTIALS = { email: "owner@flora.local", password: "flora-dev-owner-password" };
 
+/**
+ * `/` is the real Home screen since TASK-home-dashboard — "Welcome back to
+ * Flora™ 👋" is the one PageHeader subtitle it renders in every branch
+ * (farm found or not), unlike KPI/chart content which depends on the org
+ * actually having a farm and dashboard data.
+ */
 async function goHome(page: Page) {
   await page.goto("/");
-  await expect(page.getByText(/Logged in as/)).toBeVisible();
+  await expect(page.getByText("Welcome back to Flora™ 👋")).toBeVisible();
 }
 
 test.describe("token chain", () => {
@@ -201,7 +207,7 @@ test.describe("login", () => {
     await page.getByLabel("Password").fill(CREDENTIALS.password);
     await page.getByRole("button", { name: "Sign in" }).click();
     await expect(page).toHaveURL("/");
-    await expect(page.getByText(/Logged in as/)).toBeVisible();
+    await expect(page.getByText("Welcome back to Flora™ 👋")).toBeVisible();
   });
 
   test("invalid credentials render the AlignUI Hint error", async ({ page }) => {

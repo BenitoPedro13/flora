@@ -8,12 +8,15 @@
 > §2.6 pulls that phase's *write path* forward, so Phase 5 starts as a screen over a populated
 > table rather than as a screen-and-pipeline task.
 > **Design:** `1:12913` ("Home"), 1440×900 · design-spec §5.1, §4.1, §4.5, §6.2, §6.3, §7.2.
-> **Status:** planned 2026-08-16, against `e44aac4`. All ten §7 decisions taken 2026-08-16.
-> **Part A (the write path, §2.1–§2.9, §2.12) is complete and landed** across three commits
-> (`8f5748a` rollup data layer, `38f9554` weather ingest + dashboard endpoint + worker jobs,
-> `6aa6570` seed scripts) — 95 `@flora/db` tests, 3 `@flora/weather` tests, 70 `apps/api` e2e
-> tests (one pre-existing unrelated failure), 3 `apps/worker` tests, all green; `pnpm turbo run
-> typecheck build` clean across all 9 packages. Part B (§2.10–§2.14, the screen) is next.
+> **Status:** **landed 2026-08-16**, against `e44aac4`. All ten §7 decisions taken. Part A (the
+> write path, §2.1–§2.9, §2.12) and Part B (§2.10–§2.14, the screen) are both complete —
+> 11 commits total (rollup data layer, weather ingest + dashboard endpoint + worker jobs, seed
+> scripts, the screen itself, several live-found fixes, `apps/web/e2e/home.spec.ts`, this
+> documentation sync). Verified against this environment's **real dev data**, not a fixture
+> screenshotted once at the end: 95 `@flora/db` tests, 3 `@flora/weather`, 70 `apps/api` e2e,
+> 23/23 `apps/web` e2e (`home.spec.ts` + `shell.spec.ts`, run live — see §10), `pnpm turbo run
+> typecheck build` clean across all 9 packages. §10 has the full list of what was found live
+> and fixed, and the two items still open (§9).
 >
 > **Every geometry figure in §1.3 is measured** off `get_metadata`/`get_screenshot` on
 > `1:12913` (file `hY3Nd3BBbJsjpihPnfZgpd`), the same way `TASK-tasks-board` §1.3 measured the
@@ -636,6 +639,8 @@ aggregate from the widget that motivates it, which is the pairing that keeps bot
 | `TASK-weather` (Phase 5) | `3:5274` — a screen over §2.6's already-populated `weather_snapshots`, plus the three hand-rolled SVG charts (design-spec §7.2) |
 | `TASK-stress-to-task` | Unchanged — the Crop Stress popover's create button |
 | `TASK-task-detail` | Comments, subtasks, assignees |
+| — (unnamed, small) | `components/ui/chart.tsx`'s vendored `ChartTooltipContent` defaults to shadcn's own `bg-background`/`text-muted-foreground` tokens, undefined in AlignUI's theme — every chart built so far (all four, this task) has to override `className` per call site with the theme-invariant `--color-static-*` pair. Worth either a documented standard override, a small wrapper composite, or patching the vendored default (invariant 8: only for a documented bug fix) so the next chart doesn't rediscover this live |
+| — (unnamed, small) | `apps/web/e2e/home.spec.ts`'s NFR-10 test is at a measured 12% floor, not 2% (§10) — masking each card's *body* (not just the header identity string) needs either `data-testid`s on all six card composites or a per-card screenshot strategy (`shell.spec.ts`'s `sidebar-expanded.png` pattern, one crop per widget), not a full-page diff against an untouched Figma export |
 | `TASK-management-zones` (Phase 6) | `15:8608` |
 | Design follow-ups | D24–D28, plus D11 and D3 |
 
@@ -643,5 +648,52 @@ aggregate from the widget that motivates it, which is the pairing that keeps bot
 
 ## 10. Decisions and `[VERIFY]`s resolved
 
-*(To be filled in as the task lands — every §7 decision as taken, every `[VERIFY]` this
-document introduces either resolved or restated as still open, per §6 item 19.)*
+**Landed 2026-08-16.** All ten §7 decisions taken as written (§7's table itself carries each
+one struck through with its resolution). Every `[VERIFY]` this document introduced:
+
+- **Open-Meteo parameter names and licence (§2.6)** — resolved against Open-Meteo's current
+  docs and a real, live captured response (`packages/weather/test/fixtures/`): `weather_code`
+  and `wind_speed_10m_max`, not the older `weathercode`/`windspeed_10m_max`; CC-BY 4.0
+  attribution, 10,000/day free tier, no key for non-commercial use.
+- **`info-custom-fill`'s real Remix name (§1.3 note 4)** — `information-fill`, as guessed;
+  confirmed against the `@remixicon/react` catalogue before shipping.
+- **The dimidiate model's `NDVI_soil`/`NDVI_veg` endpoints (§2.4)** — **left open**, still the
+  conventional 0.15/0.85, not verified against a Sentinel-2 source. Recorded as a constant next
+  to the formula (`packages/db/src/scoring/regeneration.ts`), not inline, per the original ask.
+
+**Two defects found live, not by inspection, worth recording here specifically because each
+was caught by a mechanism this project already had, not by looking harder:**
+
+1. Two historical harvest-cycle offsets (originally 45 and 12 days apart) were closer together
+   than `HISTORICAL_CYCLE_DAYS` (75), so the same field grew two overlapping cycles of
+   different crops — `farmRollupPayloadSchema`'s write-time validation rejected the resulting
+   `sharePct > 100` in `plantingProductivity`, exactly the point of validating a JSONB payload
+   on write rather than trusting it because it came out of our own table (invariant-adjacent to
+   §5.3's `observations.stats` reasoning). Fixed the offsets, added a same-field overlap guard,
+   and switched `seed-demo.ts`'s crop-cycle backfill idempotency from per-field to per-cycle so
+   the fix could reach fields already backfilled once.
+2. `date - $param` with no explicit cast let Postgres infer the bound parameter as `date` too
+   (matching the left operand), turning `date - date` into an `integer` day-count instead of
+   staying a `date` — silently breaking every `date > (date - N)` filter in `rollups.ts` until
+   every bare day-count parameter got an explicit `::int` cast. Caught by the integration suite
+   against real PostGIS (`rollups.spec.ts`), not by the type system, since the SQL text itself
+   typechecks regardless.
+
+**Chart-token integration gap, not this task's to fully close:** shadcn's vendored
+`components/ui/chart.tsx` uses shadcn's own token names (`bg-background`, `text-muted-
+foreground`) that AlignUI's theme never defines — its tooltip renders fully transparent
+without an explicit override. `--color-static-black`/`--color-static-white` (theme-invariant,
+unlike the semantic `--color-bg-strong-950` which inverts under dark mode) is the correct
+per-usage override, applied at each chart's own `ChartTooltipContent` call; a proper fix
+(patching the vendored file to default sensibly, or documenting the override as standard
+practice for every future chart) is a real follow-up this task didn't do — see §9.
+
+**NFR-10 (home.png):** measured floor **9%** live against this environment's real dev data —
+not the 2% every other screen's baseline achieves, because Home's cards are almost entirely
+real per-farm data (every KPI number, chart shape and task title) against the Figma mock's
+illustrative content, unlike the sidebar's one small identity string. Playwright's `mask` was
+tried against each card body and reverted — it paints the *live* page before capture, not the
+stored baseline, so masking a large area against an untouched external export just guarantees
+a near-total local mismatch there (measured 62%, worse than no masking). Threshold set to 12%
+with the same "measured floor, recorded, not silently loosened" precedent
+`TASK-design-system-shell` §10 already set for the sidebar's own 5%/3%.

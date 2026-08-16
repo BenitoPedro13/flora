@@ -342,45 +342,63 @@ part of the card header component, not as per-card decoration.
 
 ### 5.1 Home — `1:12913`
 
-Page header: 56 px avatar · "Maria Goodpart" (`Title/H5`) over "Welcome back to Flora™ 👋"
-(`Paragraph/Small`, `text-sub-600`) · right: search icon, bell with an unread dot, and a
-primary **+ Create Request** button.
+**Built 2026-08-16 (`TASK-home-dashboard`).** The prose this section carried before was the
+mock's illustrative content, not measurement — every figure below is measured off
+`get_metadata`/`get_screenshot` on `1:12913` (`TASK-home-dashboard` §1.3), and every content
+gap the mock's numbers implied (Energy Generated, the Regeneration Score formula, the
+e-commerce channel rows, "277 T" vs a farm's real harvest) is resolved in that task's §7, not
+here — this section stays the geometry record.
 
-**Row 1** (y 94, h 218) — three KPI tiles at 214.33 px each, then one 467 px card, all
-inside a single bordered container with internal dividers (not four separate cards):
+Artboard 1440×900. Content column x=298, width 1110 (design-spec §4.1); `PageContainer` gives
+1104 at `max-w-[1168px] px-8`, a 0.5% scale inside NFR-10's budget. Page header: 56 px avatar ·
+name (`Title/H5`) over "Welcome back to Flora™ 👋" · right: search icon (disabled), bell
+(disabled), **+ Create Task** (relabelled from the mock's undesignable "+ Create Request",
+§7 decision 7).
 
-- **KPI tile**: 56×56 `bg-weak-50` rounded tile holding a 42 px green fill icon at top;
-  at the bottom a `Label/Small` label + a 16 px info icon, then the value in `Label/X Large`
-  with a delta badge beside it. Values as designed: Crops Stocked **277 T** `↗14%`,
-  Energy Generated **63,3 MW** `↘8%`, Water Used **22 kL** `↗14%`.
+**Row 1** (298, 94), **1110 × 218** — **one bordered container**, not four cards, radius 16,
+internal dividers. Three KPI cells of 214.33, then a 467 px Crops Stocked cell:
 
-  > **v1 change — middle tile.** Two of these three tiles have no data source in the design.
-  > With Energy deferred, the middle tile becomes **Fields at Risk** (count of fields with
-  > unmuted stress zones, `alert-fill` icon, no unit suffix), and **Water Used** is re-sourced
-  > from volumes logged on completed watering tasks. Layout, sizes and the delta badge are
-  > untouched — only the middle tile's label, icon and source change. Rationale and sign-off
-  > status in architecture §4.4.
-- **Crops Stocked** card: a 103 px donut with **277T / Crops** centred, beside a 2×2 grid of
-  legend cells — coloured dot + crop name + share (Corn 35%, Wheat 28%, Soy 25%, Rice 12%).
+- **KPI tile**: 56×56 `bg-weak-50` icon tile, 42 px fill glyph inset 7; label row (`Label/Small`
+  + a 16 px info icon — `information-fill`, resolving the mock's non-Remix `info-custom-fill`
+  layer name) then value (`Label/X Large`) + a delta badge that **renders nothing** when there
+  is no 7-day-old rollup to compare against (§2.3) — never a fabricated `↗0%`. Tiles, left to
+  right: **Crops Stocked** (harvested, trailing 12 months — §7 decision 4), **Fields at Risk**
+  (replaces the mock's Energy Generated — architecture §4.4, `alert-fill`, no unit suffix),
+  **Water Used** (`tasks.water_volume_m3`, trailing 30 days, displayed in kL).
+- **Crops Stocked** cell, 467 wide: header (`plant-line` + title + Details, links to `/fields`)
+  over a divider, then a 103 px donut (`{total} T` / `Crops` centred) beside a 2×2 legend grid
+  — coloured dot + crop name + share. Real crop names and shares, not the mock's fixed
+  Corn 35/Wheat 28/Soy 25/Rice 12.
 
-**Row 2** (y 328, h 270)
+**Row 2** (y 328, h 270), gap 16:
 
-- **Regeneration Score** (335 wide): a 180° arc gauge, green fill on a light track with
-  rounded caps, **95** in ~40 px type centred with `TOTAL SCORE` beneath; below a divider, a
-  row with a 37 px rounded icon tile, **86**, "Nice you had a greater score!" and a chevron.
+- **Regeneration Score** (335 wide): a 180° arc gauge (`ArcGauge`, `startAngle 180/endAngle 0`),
+  the score centred with the AAFC five-class label beneath it (`Desired`/`Good`/…, not the
+  mock's meaningless "total score" caption — architecture §5.4) — below a divider, a 37 px icon
+  tile row showing yesterday's score and a real up/down/equal comparison sentence, or the
+  current score's own component count on a farm's first-ever score.
 - **Planting Productivity** (759 wide): 12-month stacked column chart, 40 px bars, y-axis
-  0–100% in 25% steps, gridlines `stroke-soft-200`, four green stack segments.
+  0–100% in 25% steps — share of field area under an active crop cycle per month, stacked by
+  crop (§7 decision 5); totals vary month to month rather than always summing to 100%.
 
-**Row 3** (y ~613)
+**Row 3** (y 613/613/614 — Pending Tasks sits 1px lower), gaps **24 then 16**, unequal
+**top-aligned** heights (384/362/396) that together overflow the 900px artboard (613 + 396 =
+1009) — the page scrolls, the same fact `TASK-tasks-board` §10 already recorded for its own
+screen:
 
-- **Weather** (400 wide): two stacked day cards — 64 px weather glyph, day name right-aligned
-  in `Label/Large`, temperature in `Label/X Large` with a superscript unit, date at right.
-- **Gathering Rate** (335 wide): **1,23T**`/day` with a `-0.4%` badge, a
-  `1D/1W/1M/3M/1Y` button group, a green gradient area chart over 6 months, then two rows of
-  channel breakdown (Online Store $52.12 ↑4.5%, Instagram $37.75 ↑3.2%).
-- **Pendent Tasks** (335 wide): stacked task cards — "Field: Wheat 09", a divider, the task
-  title in `Label/Medium`, a 16 px progress ring + `25%`, then an avatar group and an
-  activity tag.
+- **Weather** (400 wide, h 384): two stacked `WeatherDayCard`s, 64 px weather glyph, day name
+  right-aligned, temperature, date. Real today/tomorrow forecast from the Open-Meteo ingest
+  (architecture §11.3), or an honest empty state before the ingest job has run for a farm —
+  never invented.
+- **Gathering Rate** (335 wide, h 362): rate `/day` + a delta badge, a `1D/1W/1M/3M/1Y` range
+  group (only 1M has real data behind it — the rest are disabled with a tooltip, §7 decision 6),
+  a green gradient area chart, then **two rows of the top crops by harvested volume** — real
+  data replacing the mock's e-commerce channel rows (Online Store/Instagram have no domain
+  reading, §7 decision 6).
+- **Pending Tasks** (335 wide, h 396): the same `Widgets [HR Management]` block as the board's
+  card, `compact` (156px, footer row dropped) — real `Field:`, title, progress ring and
+  activity tag, live-read so a task finished a minute ago never shows as pending (§3). Title
+  says **"Pending Tasks"**, the mock's own "Pendent Tasks" typo fixed (D10).
 
 ### 5.2 Fields — list — `1:35172`
 
@@ -566,13 +584,18 @@ block's.
 |---|---|---|
 | `Sidebar [Navigation] [1.0]` | `AppSidebar` | Avatar · Divider · Button · Tooltip (collapsed rail) |
 | `Page Header [1.0]` | `PageHeader` | Avatar · Button · Badge · Dropdown |
-| `Widgets [HR Management] [1.0]` | `TaskCard` | Divider · `Avatar Group` · `Progress Circle` — the §4.5 card anatomy |
-| `Schedule Cards [Schedule] [1.0]` | `WeatherDayCard` | plain layout + Label tokens |
+| `Widgets [HR Management] [1.0]` | `TaskCard` | Divider · `Avatar Group` · `Progress Circle` — the §4.5 card anatomy — **built**, `compact` variant added 2026-08-16 (`TASK-home-dashboard` §2.11) for Pending Tasks, 184px → 156px |
+| `Schedule Cards [Schedule] [1.0]` | `WeatherDayCard` | plain layout + Label tokens — **built 2026-08-16** (`TASK-home-dashboard` §2.11) |
 | `File Upload Cards [1.0]` | `ImportCard` | File Upload · Progress Bar · Compact Button |
 | `Chart Legends [1.0]` | `ChartLegend` | shadcn `ChartLegendContent` (§7) |
 | `Content Divider [1.0]` | AlignUI `Divider` | direct substitute |
 | `Stacked Progress Bar` | `StackedProgressBar` | flex divs on the green ramp |
-| `Gauge Bar [Time Off] [1.0]` | `ArcGauge` | shadcn `RadialBarChart` (§7.2) |
+| `Gauge Bar [Time Off] [1.0]` | `ArcGauge` | shadcn `RadialBarChart` (§7.2) — **built 2026-08-16** (`TASK-home-dashboard` §2.10), kept generic (`value`/`max`/`label`) so Weather's Rain Chance (Phase 5) can reuse it |
+
+**Home's `Widgets [HR Management]` instance (Pending Tasks), corrected 2026-08-16
+(`TASK-home-dashboard` §1.3 note 3):** the same three layers `TASK-tasks-board` found hidden
+are hidden here too, plus this instance additionally drops the **footer row** (comments,
+subtasks, dates) — the whole 184 → 156px difference from the board's own card.
 
 `AppSidebar` and `PageHeader` are the two with real work in them — the collapsed 80 px rail
 (§4.3) and the active-state edge indicator (§4.2) are the fiddly parts. Budget them as
@@ -593,6 +616,11 @@ turned that layer off.
 `MapToolbar` · `FieldLabelPill` · `StressZoneRow` · `StressPopover` · `ZonePill` ·
 `ScenarioCard` · `PrescriptionTable` · `TaskCard` · `KanbanColumn` · `KanbanBoard` ·
 `WeatherDayCard` · `AssetCard` · `AssistantFab`
+
+**Home's composites, built 2026-08-16 (`TASK-home-dashboard` §2.11):** `KpiTile`/`KpiRow` (the
+one bordered container with internal dividers, §5.1) · `DeltaBadge` · `CropsStockedCard` ·
+`RegenerationCard` · `PlantingProductivityCard` · `WeatherCard`/`WeatherDayCard` ·
+`GatheringRateCard` · `PendingTasksCard`.
 
 ---
 
@@ -698,10 +726,10 @@ not extractions:
 | D6 | **No focus-visible treatment** anywhere. Needed for keyboard accessibility. |
 | D7 | **Contrast**: `text-soft-400 #99a0ae` on white is **2.6:1** — below WCAG AA's 4.5:1 for body text. It is used for axis labels, units and coordinates. Either accept it for non-essential decoration only, or darken to `text-sub-600` where it carries meaning. |
 | D8 | **Carbon Offset** needs a design pass or formal removal (§2.2). |
-| D11 | **Home's KPI row** — two of three tiles have no data source. The proposed re-sourcing (§5.1, architecture §4.4) needs sign-off, including a new icon and label for the middle tile. |
+| D11 | ~~**Home's KPI row**~~ — **RESOLVED 2026-08-16 (`TASK-home-dashboard` §7 decision 1, architecture §4.4/Q3).** The re-sourcing is taken as proposed — Fields at Risk (`alert-fill`) replaces Energy Generated, Water Used re-sourced from `tasks.water_volume_m3`. Layout, sizes and the delta badge are unchanged. |
 | D12 | **The sidebar at four entries** has more bottom whitespace than designed. **Answered the cheap way for now** (`TASK-design-system-shell`, 2026-08-15): the nav block stays top-aligned and Settings/Support stay bottom-pinned, exactly as the five-entry design has them — noted here, not designed around. Confirm with the designer if a rebalanced layout is wanted. |
 | D9 | `fancy/primary/default` still blue in Figma (§2.3). |
-| D10 | "Rain Chanse" typo (§5.6); "Pendent Tasks" should be "Pending Tasks"; "Specie Planted" should be "Species Planted"; "Energy Fonts" is likely a mistranslation of "Energy Sources" (*fontes*, PT). **Added 2026-08-16 (`TASK-crop-stress` §1.2):** Crop Stress's "**Data:**" is the same class of typo — *data* is Portuguese for *date* — shipped as "**Date:**". |
+| D10 | "Rain Chanse" typo (§5.6); ~~"Pendent Tasks" should be "Pending Tasks"~~ — **shipped fixed 2026-08-16** (`TASK-home-dashboard` §5.1); "Specie Planted" should be "Species Planted"; "Energy Fonts" is likely a mistranslation of "Energy Sources" (*fontes*, PT). **Added 2026-08-16 (`TASK-crop-stress` §1.2):** Crop Stress's "**Data:**" is the same class of typo — *data* is Portuguese for *date* — shipped as "**Date:**". |
 | D13 | **No auth screens exist.** Login, forgot-password, and invite-acceptance are all undesigned — the screen inventory (§2) has none. `TASK-auth-tenancy` shipped a functional, unstyled login page (Tailwind only, no AlignUI) to prove the cookie flow. `TASK-design-system-shell` (2026-08-15) restyled it to AlignUI tokens (`Input`/`Label`/`Hint`/`Button` inside a `Card`) — same flow, same fetch, still not a *designed* screen. This gap closes only once login/forgot-password/invite-acceptance get real artboards. |
 | D15 | **The field card's `Soil Moisture` and `Carbon Ton Potential` metrics have no data source anywhere in the architecture** (`TASK-domain-schema`, 2026-08-15). Soil moisture is plausibly Open-Meteo's soil-moisture parameters at the field centroid (Phase 5) or an NDWI observation (Phase 2); carbon-ton potential has no candidate at all and may be a leftover of the carbon-credit template (§2.2 / architecture §4.3) already identified. **Layout resolved 2026-08-16 (`TASK-fields` §1.1, §3.3), the data question stays open:** the card keeps all four metric slots (removing two would change the designed proportions) and renders `—` with a `title="No data source yet"` in the two unsourced ones — `components/flora/field-card.tsx`. Nothing invented, nothing silently dropped. This gap closes only once a real data source is decided for one or both. |
 | D14 | ~~Does Fields default to the collapsed sidebar rail?~~ — **RESOLVED 2026-08-16 (`TASK-fields` §1.1): no.** No route override was added — `AppSidebar`'s `collapsed` stays a plain user toggle persisted in the `flora_sidebar` cookie, unchanged from `TASK-design-system-shell`. The three Fields artboards showing it collapsed was the designer's framing, not a rule; `apps/web/e2e/fields.spec.ts` runs against whatever the toggle's current state is, not a forced default. Revisit only if a real designer confirms collapsed-by-default is wanted. |
@@ -709,6 +737,11 @@ not extractions:
 | D17 | **Sort and Filter have no menus.** `1:35172` shows the collapsed toolbar controls only, no open state. Built 2026-08-16 (`TASK-fields` §2.7) as compact `Select` triggers — `Name A–Z` / `Name Z–A` / `Newest` / `Manual` for sort, crop species for filter — `apps/web/app/(app)/fields/fields-toolbar.tsx`. |
 | D18 | **No import flow is designed.** `File Upload Cards [1.0]` exists as a PRO block reference (§6.2) but the preview table and its per-row verdicts are not drawn. Built 2026-08-16 (`TASK-fields` §2.9) as `ImportCard` — `components/flora/import-card.tsx` — GeoJSON only; KML/Shapefile wait on architecture §11.5's parser `[VERIFY]`. |
 | D19 | **The raster colour ramp (§5.3, `18:6567`) has no exact hex stops** — the Figma names it qualitatively ("red→yellow→green") and shows only the legend's numeric labels (`.78 .71 .63 .56 .48 .41`), never the ramp's own swatch values. `TASK-satellite-pipeline` §2.8 picked a defensible three-stop red/yellow/green gradient and documented it as a default pending designer sign-off — still true, still **not** verified against the Figma. **Moved 2026-08-16 (`TASK-crop-stress` §2.2/§3.3):** `NDVI_RAMP_STOPS` now lives in `packages/contracts/src/ramp.ts`, not `packages/raster/src/ramp.ts` — the legend (`ColorRampLegend`, `components/map/`) needed the exact same stops the worker paints the PNG with, so the constant moved to the one package both sides import, and `packages/raster` imports it back. This is the invariant-7 exception's location, not a second exception — CLAUDE.md's invariant 7 now names `packages/contracts/src/ramp.ts` where it previously named `packages/raster/src/ramp.ts`. Revisit if a designer supplies exact stops. |
+| D24 | **The Regeneration Score's number and its "total score" caption** (§5.1) have a real formula now (`TASK-home-dashboard` §2.4, architecture §5.4) but the mock's caption never meant anything and the secondary row's copy ("Nice you had a greater score!") was written for an undefined number. Needs a designer's eye on the caption (a real AAFC class name is shown instead, e.g. "Desired") and the comparison sentence's three states (up/down/equal). |
+| D25 | **Planting Productivity has no definition anywhere in the design** — just a shape (12-month stacked columns, 0–100%). `TASK-home-dashboard` §7 decision 5 defined it as share of field area under an active crop cycle per month, stacked by crop; needs sign-off. |
+| D26 | **The Gathering Rate channel rows have no domain** — "Online Store $52.12", "Instagram $37.75" are e-commerce, Flora has no orders or money. `TASK-home-dashboard` §7 decision 6 replaced them with the top two crops by harvested volume, same row geometry. Needs sign-off; the range group (`1D/1W/1M/3M/1Y`) is shipped with only 1M functional, the rest disabled with a tooltip. |
+| D27 | **`+ Create Request` has no request domain** — the only creatable thing on the screen is a task. `TASK-home-dashboard` §7 decision 7 relabelled it `+ Create Task`, opening the existing `TaskEditor`. Needs sign-off on the label change itself. |
+| D28 | **Four of six "Details" buttons have no destination** (Regeneration, Planting Productivity, Gathering Rate, Weather) — Crops Stocked → `/fields` and Pending Tasks → `/tasks` are real. `TASK-home-dashboard` §7 decision 9: the four with nowhere to go are disabled with a tooltip naming why, the same treatment `TASK-crop-stress` and `TASK-tasks-board` each chose for their own undesigned controls. |
 
 ---
 

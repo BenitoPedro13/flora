@@ -2,10 +2,15 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * `shell.spec.ts` (TASK-design-system-shell §2.10), `fields.spec.ts`
- * (TASK-fields §6), `stress.spec.ts` (TASK-crop-stress §2.14), and
- * `tasks.spec.ts` (TASK-tasks-board §2.11) — the `chromium` project's
- * `testMatch` grows with each screen task. 1440×900 and maxDiffPixelRatio
- * 0.02 are NFR-10's numbers.
+ * (TASK-fields §6), `stress.spec.ts` (TASK-crop-stress §2.14),
+ * `tasks.spec.ts` (TASK-tasks-board §2.11), and `home.spec.ts`
+ * (TASK-home-dashboard §2.14) — the `chromium` project's `testMatch` grows
+ * with each screen task. 1440×900 and maxDiffPixelRatio 0.02 are NFR-10's
+ * numbers. **Corrected 2026-08-16 (`TASK-home-dashboard`):** `tasks.spec.ts`
+ * was written by `TASK-tasks-board` and documented right here as part of
+ * this list, but never actually added to the regex below — it had not been
+ * runnable through this config since it landed. Found live, adding
+ * `home.spec.ts` alongside it.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -34,7 +39,7 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testMatch: /shell\.spec\.ts|fields\.spec\.ts|stress\.spec\.ts/,
+      testMatch: /shell\.spec\.ts|fields\.spec\.ts|stress\.spec\.ts|tasks\.spec\.ts|home\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],
