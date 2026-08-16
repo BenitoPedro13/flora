@@ -35,7 +35,10 @@ queue and per-field scheduler, six new `apps/api` endpoints, `db:seed:satellite`
 `TASK-crop-stress` (the `18:6567` screen reading what that write path produces —
 `/fields/[fieldId]/stress`: the raster overlay, stress-zone map layer, colour-ramp legend, the
 map toolbar's locate/measure/zoom, the grouped detection list, the popover and its three
-mutations, the manual-refresh poll, NFR-8's stale badge) have all landed. **Phases 0, 1 and 2 are
+mutations, the manual-refresh poll, NFR-8's stale badge), and `TASK-satellite-live` (the fix that
+made the CDSE round trip actually work against a real account — `packages/satellite/src/cdse/process.ts`
+now sends `Accept: application/tar` and extracts named TAR members instead of calling
+`res.formData()` on a bare TIFF) have all landed. **Phases 0, 1 and 2 are
 complete**; Phase 3 (`TASK-tasks-board`) is next.
 Email+password login with cookie sessions works end to end in a real browser, styled with
 AlignUI tokens; every tenant table is protected by the catalog test in
@@ -47,11 +50,17 @@ editor, and GeoJSON import — all exercised live in a browser and by `apps/web/
 second entry point is double-clicking the card (`TASK-crop-stress` §2.12), mirroring the map
 polygon's own double-click gesture. `/` still renders the one-line session sentence. Real
 `observations` and `stress_zones` rows exist for the demo fields via `db:seed:satellite`, which
-replays a synthetic-but-known raster through the real pipeline (`packages/raster`) — no CDSE
-credentials were available in this environment, so the five Sentinel Hub `[VERIFY]`s were
-resolved against CDSE's own current docs rather than a live call, and the actual live round trip
-(`TASK-satellite-pipeline` §6 item 1) is still open (`TASK-satellite-live`); see that task's §10
-for the full list of what's landed vs. still open. `TASK-crop-stress` found and fixed two defects
+replays a synthetic-but-known raster through the real pipeline (`packages/raster`), and now also
+via the real thing: `TASK-satellite-live` got real CDSE credentials working end to end — a manual
+refresh on Field 237 writes a real `observations` row (`captured_on = 2026-08-14`, a real
+`scene_id` ending `.SAFE`, `stats.mean` inside the expected NDVI range) with its PNG fetchable
+from MinIO — closing `TASK-satellite-pipeline` §6 item 1. The five Sentinel Hub `[VERIFY]`s are
+resolved: four against CDSE's own current docs, the fifth (the Process API's multi-output
+response shape) against the live account itself, which is also where the bug was — `process.ts`
+sent no `Accept` header, CDSE silently returned a bare single TIFF instead of the requested TAR
+of two, and `res.formData()` threw undici's own parser error on it, long mistaken for a
+token-endpoint failure. NFR-5 (200-field timing) and NFR-6 (PU budget) stay open — see
+`TASK-satellite-pipeline` §6 items 12–13 and `TASK-satellite-live` §10. `TASK-crop-stress` found and fixed two defects
 in the landed write path (a manual refresh never retried — the API's producer `Queue` had no
 `defaultJobOptions`, unlike the worker's registration — and `jobId` was write-only, no endpoint
 read a job back) and one in the seed script itself (the synthetic raster filled its whole

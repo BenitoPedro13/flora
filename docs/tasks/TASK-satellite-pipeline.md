@@ -856,7 +856,7 @@ backfill deferred to Phase 4 — yes; (6) NDVI-only on the daily schedule — ye
 
 | # | Item | Result |
 |---|---|---|
-| 1 | Live round trip | **Not run** — no CDSE credentials in this environment. Everything else is fixture/synthetic-driven per the seam §1.1 describes. |
+| 1 | Live round trip | **Passed, 2026-08-16 (`TASK-satellite-live`).** A real one-file bug (`process.ts` calling `res.formData()` on a TAR response) blocked every refresh once real credentials existed; fixed with an `Accept: application/tar` header and `nanotar` extraction. A manual refresh on Field 237 completed via the job-status endpoint, wrote a real `observations` row (`captured_on = 2026-08-14`, `scene_id` ending `.SAFE`, `stats.mean = 0.8637` inside `[0.70, 0.95]`), and its PNG is fetchable from MinIO at the stored `raster_key`. `stress_zones` for that observation are legitimately absent — a cloud-free, uniformly high-NDVI (0.75–0.90) Amazon scene with all pixels above the 0.6×/0.75×-median stress thresholds; a true negative, not a bug. |
 | 2 | Golden fixture (stats/count/centroid stability) | **Passed** — `packages/raster/src/golden.spec.ts`, against a synthetic-but-known GeoTIFF pair built and decoded through the real `geotiff` reader/writer (not a captured live response — §10's earlier note). |
 | 3 | Geometry not flipped | **Passed** — `vectorise.spec.ts`'s explicit north/south/east/west transform assertions, plus the golden fixture's centroid-placement check. |
 | 4 | Area rules (min/max, split) | **Passed** — `detect.spec.ts`: a synthetic >4ac region yields ≥3 zones each ≤4ac; a sub-0.5ac candidate is dropped. |
@@ -867,8 +867,8 @@ backfill deferred to Phase 4 — yes; (6) NDVI-only on the daily schedule — ye
 | 9 | NFR-4 | **Passed** — `apps/api/test/nfr4.spec.ts`, both the `package.json` and `grep` checks. |
 | 10 | NFR-7 (six cross-tenant cases) | **Passed** — `apps/api/test/tenancy.e2e.spec.ts`'s registry, six new entries. |
 | 11 | NFR-2 (p95 < 50ms) | **Passed** — `observations.e2e.spec.ts`, measured against a local testcontainers Postgres (not production infra); see that test's own comment. |
-| 12 | NFR-5 (200 fields / 30 min, extrapolated) | **Not run** — no live timing exists to extrapolate from (item 1 didn't run). Do not claim a number that wasn't measured. |
-| 13 | NFR-6 / PU | **Not run** — same reason; architecture.md §11.1 records the formula, not a measured cost. |
+| 12 | NFR-5 (200 fields / 30 min, extrapolated) | **Still not run.** The live round trip now works (item 1, `TASK-satellite-live`), but this needs `db:seed:bulk`'s 200 fields pointed at real CDSE and a stopwatch — a separate job with its own quota consequences, explicitly out of scope for `TASK-satellite-live` (its §5 item 1). Now genuinely measurable; do not claim a number that wasn't measured. |
+| 13 | NFR-6 / PU | **Still not run.** Same reason — needs a month of real usage against CDSE's own dashboard (`TASK-satellite-live` §5 item 2). Real usage started 2026-08-16 with the first live refresh, so NFR-6 has a start date now; architecture.md §11.1 still records the formula, not a measured cost. |
 | 14 | RLS survives | **Passed** — `tenancy.spec.ts`'s allowlist test, the scheduler-column test, and the unchanged `assertNonBypassRlsRole` boot check. |
 | 15 | Scheduler finds work across orgs | **Passed** — `tenancy.spec.ts`'s dedicated `scheduler_fields_due_for_refresh` test, seeded across two orgs, called as `flora_app` with no GUC set. |
 | 16 | Soft delete is soft | **Passed** — `stress-zones.spec.ts` and `observations.e2e.spec.ts` both assert it. |

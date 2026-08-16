@@ -7,8 +7,9 @@ tasks, and weather.
 (`docs/tasks/TASK-foundations.md`), identity/tenancy (`docs/tasks/TASK-auth-tenancy.md`), the
 design-system shell (`docs/tasks/TASK-design-system-shell.md`), the domain schema
 (`docs/tasks/TASK-domain-schema.md`), Fields & Crops (`docs/tasks/TASK-fields.md`), the
-satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`), and the Crop Stress
-screen (`docs/tasks/TASK-crop-stress.md`) have all landed:
+satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`), the Crop Stress
+screen (`docs/tasks/TASK-crop-stress.md`), and the live CDSE round-trip fix
+(`docs/tasks/TASK-satellite-live.md`) have all landed:
 pnpm/Turborepo monorepo, Docker infra, the ten domain tables (farms, crops, fields, crop_cycles,
 observations, stress_zones, tasks + its three children) with composite foreign keys and RLS,
 email+password login with cookie sessions, row-level security enforced twice (repository filter
@@ -22,7 +23,11 @@ field boundary, the stress-zone map layer, the colour-ramp legend, the map toolb
 (locate/measure/zoom), the classification-grouped detection list, the popover with
 classify/mute/delete, a manual-refresh button that polls to completion, and NFR-8's stale badge.
 `db:seed:satellite` replays a synthetic fixture through the real pipeline for offline
-development — no CDSE credentials needed locally. `/` still renders the session
+development — no CDSE credentials needed locally. `TASK-satellite-live` closed the one real gap
+in that write path: `packages/satellite/src/cdse/process.ts` now sends `Accept: application/tar`
+and extracts the two named TAR members CDSE actually returns, instead of the bare-TIFF/`res.formData()`
+mismatch that failed every real refresh; a manual refresh on Field 237 now completes end to end
+against a real account and writes a real observation. `/` still renders the session
 sentence. Next: Tasks (`TASK-tasks-board`, Phase 3) — the "create a task from this stress zone"
 action on the Crop Stress popover is its entry point.
 See `docs/architecture.md` (system, v2) and

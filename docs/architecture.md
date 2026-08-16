@@ -792,11 +792,12 @@ PU = 1 (base @ 512x512px, 3 bands, <=16-bit)
 At the worker's `RASTER_WIDTH_PX`/`RASTER_HEIGHT_PX` default (512x512, unchanged from the
 formula's own baseline resolution) with 6 input bands (B02/B03/B04/B05/B08/SCL) and the 2x
 float32 penalty, one refresh costs meaningfully more than 1 PU — the exact multiple depends on
-how CDSE counts the two-output multipart response, which this task could not measure against a
-live account (no CDSE credentials in this environment — `TASK-satellite-pipeline` §10). **The
-actual measured PU cost of one refresh, and the resulting 200-field/30-day projection against
-the 10,000 PU/month tier, is still open** — the first task with real CDSE credentials should
-run one live refresh, read the number off CDSE's usage dashboard, and fill this in.
+how CDSE counts the two-output TAR response (`§11.1` above), which is now a real, live round
+trip (`TASK-satellite-live`) but whose PU cost has not yet been read off CDSE's own usage
+dashboard. **The actual measured PU cost of one refresh, and the resulting 200-field/30-day
+projection against the 10,000 PU/month tier, is still open** (`TASK-satellite-pipeline` §6 item
+13) — read the number off CDSE's usage dashboard after a batch of live refreshes and fill this
+in.
 
 Copernicus Sentinel *data* is free for commercial use, but CDSE states the portal's other
 contents are intended for non-commercial use, with commercial scale directed to Sentinel Hub
@@ -814,28 +815,25 @@ and Process endpoint (`sh.dataspace.copernicus.eu/api/v1/process`) were confirme
 own current docs by that task, distinct from the pre-CDSE `services.sentinel-hub.com` host an
 older guide would suggest.
 
-**Unresolved, found 2026-08-16 (`TASK-crop-stress` §9, against a real account for the first
-time) — re-open before `TASK-satellite-live` ships:**
+**Resolved 2026-08-16 (`TASK-satellite-live`, measured live against a real account — see that
+task's §1.2 for the full evidence):**
 
-1. **The Process endpoint's own docs page
-   (`documentation.dataspace.copernicus.eu/APIs/SentinelHub/Process/Examples/S2L1C.html`)
-   consistently shows the base URL as `sh.dataspace.copernicus.eu/process/v1`**, not
-   `.../api/v1/process` as coded and as this section states above. Not independently confirmed
-   which is correct — the discrepancy could be the docs page (rendered via a summarizing fetch,
-   not read raw) or the code. Cheap to settle: hit both directly with a real token and see which
-   one 404s.
-2. **`fetchIndexRaster` (`packages/satellite/src/cdse/process.ts`) always requests two named
-   outputs (`index`, `scl`) and calls `res.formData()` on the response, expecting
-   `multipart/form-data`.** The same docs page's multi-output example sends
-   `Accept: application/tar` and states the response is a **TAR archive** for more than one
-   `output.responses[]` entry — not multipart at all. If that's right, every real refresh with
-   the current code either fails outright or silently mis-parses. `packages/satellite` has no
-   tar-parsing dependency yet.
-
-Neither item is fixed — `packages/satellite` is `TASK-satellite-pipeline`'s landed code, this
-finding surfaced from `TASK-crop-stress` (a different task) pointing a real CDSE account at it
-for the first time, and confirming a fix needs testing against that same real account, which the
-session that found this didn't have write access to verify with.
+1. **The endpoint path.** `sh.dataspace.copernicus.eu/api/v1/process` (as coded) and the docs
+   page's `sh.dataspace.copernicus.eu/process/v1` are **live aliases, byte-identical**: both
+   return `200`, the same content type, the same bytes, with and without `Accept:
+   application/tar`. No change needed; the code keeps `/api/v1/process`.
+2. **The multi-output response shape.** `fetchIndexRaster` requests two named outputs (`index`,
+   `scl`). With `Accept: application/tar` sent, CDSE returns `Content-Type: application/x-tar` —
+   a ustar archive with one member per output, named `<identifier>.tif` (`index.tif`, `scl.tif`).
+   **Without** an `Accept` header the server does not error: it silently collapses to a single
+   bare `image/tiff` body (`index` only, `scl` dropped). The pre-fix code sent no `Accept` header
+   and called `res.formData()`, which threw undici's own `Content-Type was not one of
+   "multipart/form-data" or "application/x-www-form-urlencoded"` — a client-side parser error,
+   never a CDSE response, and never the token endpoint it was once misattributed to.
+   `packages/satellite/src/cdse/process.ts` now sends `Accept: application/tar`, extracts
+   members by name via `nanotar`, and throws a named `SatelliteError` if the content type or the
+   member set isn't what's documented here, so a future change to this contract fails loudly
+   instead of silently mis-parsing.
 
 ### 11.2 Mapbox
 

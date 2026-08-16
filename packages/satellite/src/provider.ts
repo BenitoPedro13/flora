@@ -32,11 +32,12 @@ export interface FetchIndexRasterInput {
 
 /**
  * Two single-band GeoTIFFs from one Process API call (one PU charge) — the
- * requested index and the Scene Classification Layer, returned as separate
- * `multipart/form-data` parts (`cdse/process.ts`'s `[VERIFY]`), not one
- * multi-band file. `bbox` is the raster's actual geographic extent (the
- * clipped boundary's envelope), for the observation's stored `bbox` and the
- * pixel↔lon/lat transform in `packages/raster`.
+ * requested index and the Scene Classification Layer, extracted from a TAR
+ * archive as separate members (`cdse/process.ts`, verified live 2026-08-16,
+ * `TASK-satellite-live` §1.2), not one multi-band file. `bbox` is the raster's
+ * actual geographic extent (the clipped boundary's envelope), for the
+ * observation's stored `bbox` and the pixel↔lon/lat transform in
+ * `packages/raster`.
  */
 export interface FetchIndexRasterResult {
   indexGeotiff: ArrayBuffer;

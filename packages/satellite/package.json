@@ -12,14 +12,18 @@
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "live-check": "dotenv -e ../../.env -- tsx scripts/live-check.ts"
   },
   "dependencies": {
-    "@flora/contracts": "workspace:*"
+    "@flora/contracts": "workspace:*",
+    "nanotar": "0.3.0"
   },
   "devDependencies": {
     "@flora/config": "workspace:*",
     "@types/node": "24.13.3",
+    "geotiff": "3.0.5",
+    "tsx": "4.23.12",
     "typescript": "5.9.3",
     "vitest": "4.1.10"
   }

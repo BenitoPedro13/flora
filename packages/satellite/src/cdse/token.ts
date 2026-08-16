@@ -5,6 +5,12 @@ import { SatelliteError } from "../errors.js";
  * `services.sentinel-hub.com`, the pre-CDSE Sentinel Hub SaaS host
  * (architecture §11.1's `[VERIFY]`, resolved: Keycloak-backed, confirmed
  * against CDSE's own openEO client-credentials documentation).
+ *
+ * Verified live against a real account, 2026-08-16: returns HTTP 200 and a real
+ * `access_token`. The `Content-Type was not one of "multipart/form-data" or
+ * "application/x-www-form-urlencoded"` error historically blamed on this endpoint was
+ * misattributed — it comes from `process.ts`'s `res.formData()` call, not from here
+ * (`TASK-satellite-live` §1.2). This file was never the problem.
  */
 const TOKEN_ENDPOINT = "https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token";
 
