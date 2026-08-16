@@ -62,3 +62,21 @@ export type ListObservationDatesQuery = z.infer<typeof listObservationDatesQuery
  */
 export const refreshAcceptedSchema = z.object({ jobId: z.string() });
 export type RefreshAccepted = z.infer<typeof refreshAcceptedSchema>;
+
+/**
+ * `GET /fields/:id/observations/refresh/:jobId` (TASK-crop-stress §2.4).
+ * `"unknown"` is deliberate: BullMQ's retention caps
+ * (`removeOnComplete: { count: 1_000 }`) mean a completed job can be evicted
+ * before the browser polls, and "the job id is gone" must not render as
+ * "it failed".
+ */
+export const refreshJobStateValues = ["waiting", "active", "completed", "failed", "unknown"] as const;
+export const refreshJobStateSchema = z.enum(refreshJobStateValues);
+export type RefreshJobState = z.infer<typeof refreshJobStateSchema>;
+
+export const refreshJobStatusSchema = z.object({
+  jobId: z.string(),
+  state: refreshJobStateSchema,
+  failedReason: z.string().nullable(),
+});
+export type RefreshJobStatus = z.infer<typeof refreshJobStatusSchema>;

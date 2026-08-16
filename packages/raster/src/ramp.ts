@@ -1,4 +1,4 @@
-import type { ObservationStats } from "@flora/contracts";
+import { NDVI_RAMP_STOPS, rampDomain, type ObservationStats } from "@flora/contracts";
 import sharp from "sharp";
 import type { DecodedRaster } from "./raster.js";
 
@@ -6,15 +6,25 @@ import type { DecodedRaster } from "./raster.js";
  * Stats + pixels → RGBA → PNG (architecture §7.2 step 3b, design-spec §5.3).
  * The ramp is relative by default (`p10` → `p90` of that field on that date)
  * — the screen task's absolute mode relabels this same PNG's legend, it does
- * not re-render (TASK-satellite-pipeline §2.8). Exact hex stops are a
- * documented default, not verified against the Figma — design-spec D19.
+ * not re-render (TASK-satellite-pipeline §2.8). `NDVI_RAMP_STOPS` and
+ * `rampDomain` live in `@flora/contracts` (TASK-crop-stress §2.3, invariant 7
+ * as amended) so the legend under this PNG is built from the exact same
+ * stops and domain that painted it. Exact hex stops are a documented
+ * default, not verified against the Figma — design-spec D19.
  */
 
 const NON_VEGETATION_FLOOR = 0.1;
 
-const RED: [number, number, number] = [239, 68, 68]; // low end of the relative domain
-const YELLOW: [number, number, number] = [234, 179, 8]; // midpoint
-const GREEN: [number, number, number] = [34, 197, 94]; // high end
+function hexToRgb(hex: string): [number, number, number] {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+const [RED, YELLOW, GREEN] = NDVI_RAMP_STOPS.map(hexToRgb) as [
+  [number, number, number],
+  [number, number, number],
+  [number, number, number],
+];
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -40,14 +50,12 @@ export async function renderRasterPng(raster: DecodedRaster, stats: ObservationS
   const { width, height, indexValues } = raster;
   const rgba = new Uint8Array(width * height * 4);
 
-  // p10 === p90 whenever the stressed population is under ~10% of the field
-  // (detect.ts's own threshold rule) — the percentile domain collapses to a
-  // single value even though real variation exists. Falling back to the
-  // observation's own min/max keeps the PNG legible in exactly the case the
-  // relative ramp is otherwise blind to; detect.ts is unaffected; it always
-  // compares against p10 directly, never this domain.
-  const domain = stats.p90 - stats.p10;
-  const [lo, hi] = domain > 0 ? [stats.p10, stats.p90] : [stats.min, stats.max];
+  // rampDomain falls back to min/max when p10 === p90 — the degenerate case
+  // where the stressed population is under detect.ts's ~10% threshold and
+  // the percentile domain collapses to a single value even though real
+  // variation exists. detect.ts is unaffected; it always compares against
+  // p10 directly, never this domain.
+  const [lo, hi] = rampDomain(stats);
   const span = hi - lo;
 
   for (let i = 0; i < indexValues.length; i++) {

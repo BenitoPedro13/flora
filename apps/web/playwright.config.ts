@@ -1,9 +1,10 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * `shell.spec.ts` (TASK-design-system-shell §2.10) plus `fields.spec.ts`
- * (TASK-fields §6) — the `chromium` project's `testMatch` grows with each
- * screen task. 1440×900 and maxDiffPixelRatio 0.02 are NFR-10's numbers.
+ * `shell.spec.ts` (TASK-design-system-shell §2.10), `fields.spec.ts`
+ * (TASK-fields §6), and `stress.spec.ts` (TASK-crop-stress §2.14) — the
+ * `chromium` project's `testMatch` grows with each screen task. 1440×900
+ * and maxDiffPixelRatio 0.02 are NFR-10's numbers.
  */
 export default defineConfig({
   testDir: "./e2e",
@@ -32,7 +33,7 @@ export default defineConfig({
     },
     {
       name: "chromium",
-      testMatch: /shell\.spec\.ts|fields\.spec\.ts/,
+      testMatch: /shell\.spec\.ts|fields\.spec\.ts|stress\.spec\.ts/,
       dependencies: ["setup"],
       use: {
         ...devices["Desktop Chrome"],

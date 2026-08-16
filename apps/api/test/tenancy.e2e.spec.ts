@@ -298,6 +298,35 @@ const REGISTRY: RegistryEntry[] = [
     },
   },
   {
+    name: 'GET /fields/:id/observations/refresh/:jobId',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const fieldAId = await createField(app, cookiesA, farmA.farmId, -94.85);
+      const fieldBId = await createField(app, cookiesB, farmB.farmId, -94.86);
+      const refreshA = await request(getServer(app))
+        .post(`/api/v1/fields/${fieldAId}/observations/refresh`)
+        .set('Cookie', cookiesA);
+      const refreshB = await request(getServer(app))
+        .post(`/api/v1/fields/${fieldBId}/observations/refresh`)
+        .set('Cookie', cookiesB);
+      const jobIdA = (refreshA.body as { jobId: string }).jobId;
+      const jobIdB = (refreshB.body as { jobId: string }).jobId;
+      return {
+        cookies: cookiesA,
+        method: 'get',
+        ownPath: `/api/v1/fields/${fieldAId}/observations/refresh/${jobIdA}`,
+        otherPath: `/api/v1/fields/${fieldAId}/observations/refresh/${jobIdB}`,
+      };
+    },
+  },
+  {
     name: 'GET /fields/:id/stress-zones',
     build: async (app) => {
       const orgA = await seedUserWithOrg('owner');

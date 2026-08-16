@@ -10,6 +10,12 @@ import { SATELLITE_QUEUE_NAME } from './queues.js';
  * Concurrency (2, CDSE's free-tier concurrent-request limit, not a tuning
  * knob) is set on the `@Processor` decorator in `refresh.processor.ts`, not
  * here — it's a worker-side setting, not a queue-registration one.
+ *
+ * `apps/api/src/observations/refresh-queue.provider.ts` duplicates this same
+ * `defaultJobOptions` block for its own producer `Queue` (TASK-crop-stress
+ * §1.1) — BullMQ applies the adding instance's options, not the processor's,
+ * so a manual refresh needs its own copy of `attempts`/`backoff` to retry at
+ * all. If this block changes, change that one too.
  */
 export const SatelliteQueueModule = BullModule.registerQueue({
   name: SATELLITE_QUEUE_NAME,

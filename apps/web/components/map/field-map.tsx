@@ -20,6 +20,14 @@ const SOURCE_ID = "fields";
 const FILL_LAYER_ID = "fields-fill";
 const LINE_LAYER_ID = "fields-line";
 
+/**
+ * Exported so a child passed via `children` (`RasterOverlay`, TASK-crop-stress
+ * §2.6) can pass `beforeId={FIELDS_FILL_LAYER_ID}` to insert itself below the
+ * field boundary layers instead of on top, where every `<Source>`/`<Layer>`
+ * added after this component's own would otherwise land.
+ */
+export const FIELDS_FILL_LAYER_ID = FILL_LAYER_ID;
+
 // The design's Amazonas farm (architecture §5.3's seed coordinates) —
 // the fallback camera when an org has no fields yet.
 const DEFAULT_CENTER = { longitude: -59.1328, latitude: -4.5831 };

@@ -421,8 +421,32 @@ range `1 Aug - 24 aug (1.9 ac)` · an optional `NEW` badge · a mute (bell-off) 
 Map: satellite base with white field boundaries and label pills (Field 237–240); the selected
 field carries the NDVI raster clipped to its boundary, red→yellow→green. Controls top-left:
 locate, measure, zoom in/out. Bottom-left: a vertical colour-ramp legend labelled
-`.78 .71 .63 .56 .48 .41` with a **Relative** dropdown beneath — so the ramp has both relative
-and absolute modes. Bottom-right: a round green assistant FAB.
+`.78 .71 .63 .56 .48 .41` with a **Relative** dropdown **beside** its lower edge, not beneath —
+**corrected 2026-08-16 (`TASK-crop-stress` §2.6)**: the metadata puts the dropdown at x 650/y 834
+while the legend spans x 653–873, i.e. to its right, not underneath it. Bottom-right: a round
+green assistant FAB.
+
+**Resolved 2026-08-16 (`TASK-crop-stress` §7)** — seven design/data gaps this screen's build
+surfaced, closing part of D3 and adding to D19:
+
+- **"8 stress detected 24.1 ac"** is illustrative, not the seed's real output. `db:seed:satellite`
+  (`TASK-satellite-pipeline`) produces **3 zones / ~1.8 ac** on Field 237, the largest pattern that
+  fits the demo field's real ~18.3 ac boundary without inventing geometry — see that script's own
+  header comment. The screen is built and visually verified against the seed's real numbers, not
+  this mock's.
+- **"Low vigor" heading over "Soil Issue" rows** contradicted itself — both are
+  `stressClassification` values. Shipped as: group by classification, heading = that group's own
+  label, so a row's dropdown always agrees with its heading.
+- **The Relative dropdown implies an absolute mode that has no second raster to switch to.**
+  Shipped disabled with a tooltip explaining why (§7 decision 1) rather than faked.
+- **The round green assistant FAB** has no assistant anywhere in this architecture or spec.
+  Omitted; the pixel cost is a 55 px circle in a region already excluded from the visual diff.
+- **The stale badge (NFR-8) has no artboard.** Built from `Badge` + `Tooltip` at the Date: row,
+  the one place on the screen already discussing dates.
+- **"Data:"** is Portuguese for *date* — the same typo class as D10's "Rain Chanse"/"Pendent
+  Tasks". Shipped as "**Date:**"; added to D10 below.
+- **`1 Aug - 24 aug`**'s inconsistent casing shipped as `1 Aug – 24 Aug` (en dash, both months
+  capitalized).
 
 **Detection popover** (~325 px): "Stress detected" + close · the id `42BB-37AC` · an
 "Identified:" row with a satellite icon and `Jul 5 - Aug 24` · a divider · a metrics row
@@ -644,7 +668,7 @@ not extractions:
 |---|---|
 | D1 | **No mobile or tablet artboards.** Everything is 1440 fixed. Below ~1280 the Fields split and the 4-across Home row have no defined behaviour. |
 | D2 | **No dark mode.** AlignUI ships dark tokens and the CLI generates them, so the cost is mostly review, not build — but no dark artboards exist. |
-| D3 | **No empty, loading, or error states** for any screen. A satellite refresh can fail (architecture NFR-8) and a new farm has zero fields; both need designs. |
+| D3 | **No empty, loading, or error states** for any screen. A satellite refresh can fail (architecture NFR-8) and a new farm has zero fields; both need designs. **Partially closed 2026-08-16 (`TASK-crop-stress` §2.13):** Crop Stress (`18:6567`) now has all five — no-imagery-yet, zero-zones, loading skeletons, fetch error with retry, and the missing-Mapbox-token placeholder (unchanged from `TASK-fields`) — built from AlignUI primitives, no artboard existed for any of them. Still open for every other screen. |
 | D4 | **Tasks List and Timeline tabs undesigned** (§5.5). |
 | D5 | **Weather "See All" has no destination** (§5.6). |
 | D6 | **No focus-visible treatment** anywhere. Needed for keyboard accessibility. |
@@ -653,14 +677,14 @@ not extractions:
 | D11 | **Home's KPI row** — two of three tiles have no data source. The proposed re-sourcing (§5.1, architecture §4.4) needs sign-off, including a new icon and label for the middle tile. |
 | D12 | **The sidebar at four entries** has more bottom whitespace than designed. **Answered the cheap way for now** (`TASK-design-system-shell`, 2026-08-15): the nav block stays top-aligned and Settings/Support stay bottom-pinned, exactly as the five-entry design has them — noted here, not designed around. Confirm with the designer if a rebalanced layout is wanted. |
 | D9 | `fancy/primary/default` still blue in Figma (§2.3). |
-| D10 | "Rain Chanse" typo (§5.6); "Pendent Tasks" should be "Pending Tasks"; "Specie Planted" should be "Species Planted"; "Energy Fonts" is likely a mistranslation of "Energy Sources" (*fontes*, PT). |
+| D10 | "Rain Chanse" typo (§5.6); "Pendent Tasks" should be "Pending Tasks"; "Specie Planted" should be "Species Planted"; "Energy Fonts" is likely a mistranslation of "Energy Sources" (*fontes*, PT). **Added 2026-08-16 (`TASK-crop-stress` §1.2):** Crop Stress's "**Data:**" is the same class of typo — *data* is Portuguese for *date* — shipped as "**Date:**". |
 | D13 | **No auth screens exist.** Login, forgot-password, and invite-acceptance are all undesigned — the screen inventory (§2) has none. `TASK-auth-tenancy` shipped a functional, unstyled login page (Tailwind only, no AlignUI) to prove the cookie flow. `TASK-design-system-shell` (2026-08-15) restyled it to AlignUI tokens (`Input`/`Label`/`Hint`/`Button` inside a `Card`) — same flow, same fetch, still not a *designed* screen. This gap closes only once login/forgot-password/invite-acceptance get real artboards. |
 | D15 | **The field card's `Soil Moisture` and `Carbon Ton Potential` metrics have no data source anywhere in the architecture** (`TASK-domain-schema`, 2026-08-15). Soil moisture is plausibly Open-Meteo's soil-moisture parameters at the field centroid (Phase 5) or an NDWI observation (Phase 2); carbon-ton potential has no candidate at all and may be a leftover of the carbon-credit template (§2.2 / architecture §4.3) already identified. **Layout resolved 2026-08-16 (`TASK-fields` §1.1, §3.3), the data question stays open:** the card keeps all four metric slots (removing two would change the designed proportions) and renders `—` with a `title="No data source yet"` in the two unsourced ones — `components/flora/field-card.tsx`. Nothing invented, nothing silently dropped. This gap closes only once a real data source is decided for one or both. |
 | D14 | ~~Does Fields default to the collapsed sidebar rail?~~ — **RESOLVED 2026-08-16 (`TASK-fields` §1.1): no.** No route override was added — `AppSidebar`'s `collapsed` stays a plain user toggle persisted in the `flora_sidebar` cookie, unchanged from `TASK-design-system-shell`. The three Fields artboards showing it collapsed was the designer's framing, not a rule; `apps/web/e2e/fields.spec.ts` runs against whatever the toggle's current state is, not a forced default. Revisit only if a real designer confirms collapsed-by-default is wanted. |
 | D16 | **The field editor (Add/Edit Field) has no artboard.** Name, boundary drawing, species (with inline "add species"), planted/expected-harvest dates, status, quantity, and delete-confirmation are all undesigned. Built 2026-08-16 (`TASK-fields` §2.8) from AlignUI primitives (`Input`, `Select`, `Modal`, `Label`, `Hint`) and the §4.5 card anatomy — `components/flora/field-editor.tsx`. |
 | D17 | **Sort and Filter have no menus.** `1:35172` shows the collapsed toolbar controls only, no open state. Built 2026-08-16 (`TASK-fields` §2.7) as compact `Select` triggers — `Name A–Z` / `Name Z–A` / `Newest` / `Manual` for sort, crop species for filter — `apps/web/app/(app)/fields/fields-toolbar.tsx`. |
 | D18 | **No import flow is designed.** `File Upload Cards [1.0]` exists as a PRO block reference (§6.2) but the preview table and its per-row verdicts are not drawn. Built 2026-08-16 (`TASK-fields` §2.9) as `ImportCard` — `components/flora/import-card.tsx` — GeoJSON only; KML/Shapefile wait on architecture §11.5's parser `[VERIFY]`. |
-| D19 | **The raster colour ramp (§5.3, `18:6567`) has no exact hex stops** — the Figma names it qualitatively ("red→yellow→green") and shows only the legend's numeric labels (`.78 .71 .63 .56 .48 .41`), never the ramp's own swatch values. `packages/raster/src/ramp.ts` (`TASK-satellite-pipeline` §2.8) picks a defensible three-stop red/yellow/green gradient and documents it as a default pending designer sign-off — it is intentionally **not** treated as verified against the Figma, and is the one file besides `globals.css`, the chart config, and `components/map/config.ts` allowed raw colour values, because it encodes pixels into a PNG rather than styling a component (invariant 7 governs `apps/web`, not a raster encoder). Revisit if a designer supplies exact stops. |
+| D19 | **The raster colour ramp (§5.3, `18:6567`) has no exact hex stops** — the Figma names it qualitatively ("red→yellow→green") and shows only the legend's numeric labels (`.78 .71 .63 .56 .48 .41`), never the ramp's own swatch values. `TASK-satellite-pipeline` §2.8 picked a defensible three-stop red/yellow/green gradient and documented it as a default pending designer sign-off — still true, still **not** verified against the Figma. **Moved 2026-08-16 (`TASK-crop-stress` §2.2/§3.3):** `NDVI_RAMP_STOPS` now lives in `packages/contracts/src/ramp.ts`, not `packages/raster/src/ramp.ts` — the legend (`ColorRampLegend`, `components/map/`) needed the exact same stops the worker paints the PNG with, so the constant moved to the one package both sides import, and `packages/raster` imports it back. This is the invariant-7 exception's location, not a second exception — CLAUDE.md's invariant 7 now names `packages/contracts/src/ramp.ts` where it previously named `packages/raster/src/ramp.ts`. Revisit if a designer supplies exact stops. |
 
 ---
 

@@ -169,7 +169,8 @@ export function FieldListPanel({ initialFieldsPage, initialGeojson, farms, crops
                   field={field}
                   selected={field.id === selectedFieldId}
                   onSelect={() => setSelectedFieldId(field.id)}
-                  onViewDetails={() => void openEditorFor(field.id)}
+                  onViewDetails={() => router.push(`/fields/${field.id}/stress`)}
+                  onDoubleClick={() => void openEditorFor(field.id)}
                 />
               ))}
             </div>

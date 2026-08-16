@@ -3,23 +3,28 @@
 An operations console for a regenerative farm — fields, crops, satellite-derived crop health,
 tasks, and weather.
 
-**Status:** Phase 0 and Phase 1 are complete, and Phase 2's write path is live. Foundations
+**Status:** Phases 0, 1 and 2 are complete. Foundations
 (`docs/tasks/TASK-foundations.md`), identity/tenancy (`docs/tasks/TASK-auth-tenancy.md`), the
 design-system shell (`docs/tasks/TASK-design-system-shell.md`), the domain schema
-(`docs/tasks/TASK-domain-schema.md`), Fields & Crops (`docs/tasks/TASK-fields.md`), and the
-satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`) have all landed:
+(`docs/tasks/TASK-domain-schema.md`), Fields & Crops (`docs/tasks/TASK-fields.md`), the
+satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`), and the Crop Stress
+screen (`docs/tasks/TASK-crop-stress.md`) have all landed:
 pnpm/Turborepo monorepo, Docker infra, the ten domain tables (farms, crops, fields, crop_cycles,
 observations, stress_zones, tasks + its three children) with composite foreign keys and RLS,
 email+password login with cookie sessions, row-level security enforced twice (repository filter
 + Postgres RLS) for every tenant table, the AlignUI token chain + `AppSidebar`/`PageHeader` shell
 every screen renders into, `/fields` — field CRUD, Mapbox boundary drawing, crop cycles,
-cursor-paginated search/sort/filter, and GeoJSON import (preview-then-commit) — and now
+cursor-paginated search/sort/filter, and GeoJSON import (preview-then-commit) —
 `packages/satellite` (the CDSE HTTP client) + `packages/raster` (decode → stats → PNG →
-detection) + `apps/worker`'s BullMQ queue and scheduler + six new `apps/api` endpoints, all with
-no UI yet: real observations and stress zones exist, `db:seed:satellite` replays a synthetic
-fixture through the real pipeline for offline development. `/` still renders the session
-sentence. Next: the Crop Stress screen (`TASK-crop-stress`, `18:6567`) reads what this pipeline
-writes, then Tasks (`TASK-tasks-board`).
+detection) + `apps/worker`'s BullMQ queue and scheduler + seven `apps/api` endpoints, and now
+`/fields/[fieldId]/stress` (`18:6567`) reading all of it: the NDVI raster overlay clipped to the
+field boundary, the stress-zone map layer, the colour-ramp legend, the map toolbar
+(locate/measure/zoom), the classification-grouped detection list, the popover with
+classify/mute/delete, a manual-refresh button that polls to completion, and NFR-8's stale badge.
+`db:seed:satellite` replays a synthetic fixture through the real pipeline for offline
+development — no CDSE credentials needed locally. `/` still renders the session
+sentence. Next: Tasks (`TASK-tasks-board`, Phase 3) — the "create a task from this stress zone"
+action on the Crop Stress popover is its entry point.
 See `docs/architecture.md` (system, v2) and
 `docs/design-spec.md` (visual) for the full picture — `CLAUDE.md` for how work happens in this
 repo.

@@ -20,9 +20,25 @@ export interface SatelliteRefreshJobData {
   fieldId: string;
 }
 
+/**
+ * `defaultJobOptions` mirrors `apps/worker/src/queue/satellite.queue.ts`'s
+ * registration exactly (TASK-crop-stress §1.1). BullMQ applies the options
+ * of the `Queue` instance that **adds** the job, not the one that later
+ * processes it — without this, a manual refresh enqueued here ran once and
+ * died on the first transient CDSE error, unlike every scheduled refresh.
+ * The two files have no import relationship (apps don't import each other,
+ * §4's tree), so this block is a deliberate, full duplicate of the worker's
+ * — if one changes, change the other.
+ */
 export function createRefreshQueue(): Queue<SatelliteRefreshJobData> {
   const url = new URL(process.env.REDIS_URL!);
   return new Queue<SatelliteRefreshJobData>(SATELLITE_QUEUE_NAME, {
     connection: { host: url.hostname, port: Number(url.port || 6379) },
+    defaultJobOptions: {
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 5_000, jitter: 0.5 },
+      removeOnComplete: { count: 1_000 },
+      removeOnFail: { count: 5_000 },
+    },
   });
 }

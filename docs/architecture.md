@@ -606,6 +606,7 @@ PATCH  /api/v1/crop-cycles/:id
 GET    /api/v1/fields/:id/observations          ?index=&from=&to=
 GET    /api/v1/fields/:id/observations/dates    → the Crop Stress date picker
 POST   /api/v1/fields/:id/observations/refresh  → 202 + jobId (manual re-run)
+GET    /api/v1/fields/:id/observations/refresh/:jobId → { jobId, state, failedReason } (poll the manual re-run — TASK-crop-stress §2.4; state ∈ waiting|active|completed|failed|unknown, a Redis read via `bullmq`, not a satellite call — invariant 1)
 
 GET    /api/v1/fields/:id/stress-zones          ?sort=priority
 PATCH  /api/v1/stress-zones/:id                 { classification | muted }
@@ -945,7 +946,7 @@ Every environment variable the code reads is listed in `.env.example`.
 | NFR-5 | Daily refresh of 200 fields completes within 30 min at concurrency 2 |
 | NFR-6 | Monthly Sentinel Hub usage stays under 60% of the free tier at 200 fields — alert at 80% |
 | NFR-7 | Cross-tenant suite: 100% of resource endpoints return 404 for a foreign-org id |
-| NFR-8 | A field whose last refresh failed renders a stale badge with the last-success date — never a zero or a blank |
+| NFR-8 | A field whose last refresh failed renders a stale badge with the last-success date — never a zero or a blank — **shipped 2026-08-16, tested by `apps/web/e2e/stress.spec.ts`'s "Field 240 shows the stale badge" case (`TASK-crop-stress` §2.11)** |
 | NFR-9 | Task drag → optimistic UI, server confirm < 200 ms p95 |
 | NFR-10 | Screenshot diff vs Figma ≤ 2% pixel delta per screen at 1440×900 |
 | NFR-11 | Map interaction holds 60 fps while panning with 200 field polygons rendered |
@@ -961,7 +962,7 @@ everything else is sequenced by how directly it serves them.
 |---|---|---|
 | **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell, domain schema (farms/crops/fields/crop_cycles/observations/stress_zones/tasks + children, composite FKs, RLS) — **landed 2026-08-15** (`TASK-foundations`, `TASK-auth-tenancy`, `TASK-design-system-shell`, `TASK-domain-schema`) — **complete** | shell |
 | **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, GeoJSON import, crop cycles, growth/species/quantity, Mapbox list + map — **landed 2026-08-16** (`TASK-fields`) — **complete** (KML/Shapefile import still open, `TASK-fields-import`) | `1:35172` |
-| **2 — Crop Stress** | **Split 2026-08-16 (`TASK-satellite-pipeline` §1.1) into two tasks — the write path is too large to review as one deliverable alongside the densest screen in the design.** `TASK-satellite-pipeline`: `packages/satellite` + `packages/raster`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, six endpoints — no screen, **landed 2026-08-16** (offline-development seam: `db:seed:satellite` makes the next task buildable with no CDSE credentials). `TASK-crop-stress` (next): `18:6567` itself — the raster overlay, colour-ramp legend, detection list/popover, date picker, mute/classify/delete | `18:6567` |
+| **2 — Crop Stress** | **Split 2026-08-16 (`TASK-satellite-pipeline` §1.1) into two tasks.** `TASK-satellite-pipeline`: `packages/satellite` + `packages/raster`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, six endpoints — no screen, **landed 2026-08-16** (offline-development seam: `db:seed:satellite` makes the next task buildable with no CDSE credentials). `TASK-crop-stress`: `18:6567` itself — the raster overlay, colour-ramp legend, detection list/popover, date picker, mute/classify/delete, the manual-refresh poll endpoint, NFR-8's stale badge — **landed 2026-08-16** — **complete** (the live CDSE round trip is still open, `TASK-satellite-live`) | `18:6567` |
 | **3 — Tasks** | Task domain scoped to fields, board with drag, list, timeline, watering volumes (§4.4) | `24:11420` |
 | **4 — Home** | Rollups, scoring, re-sourced KPI row (§4.4), all Home widgets | `1:12913` |
 | **5 — Weather** | Open-Meteo ingest + console | `3:5274` |

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { stressClassificationSchema, stressSeveritySchema } from "./enums.js";
+import type { StressClassification } from "./enums.js";
 import { polygonSchema } from "./geojson.js";
 
 /**
@@ -43,3 +44,26 @@ export const updateStressZoneSchema = z
     message: "At least one of classification or muted must be provided",
   });
 export type UpdateStressZone = z.infer<typeof updateStressZoneSchema>;
+
+/**
+ * The Crop Stress list's group heading (`18:7051`) and a row's classification
+ * dropdown read the same value, so they're built from one map — a
+ * `satisfies Record<...>` makes a new enum value a build failure, not a
+ * silent runtime gap (TASK-crop-stress §2.14).
+ */
+const STRESS_CLASSIFICATION_LABELS = {
+  soil_issue: "Soil Issue",
+  low_vigor: "Low Vigor",
+  pest: "Pest",
+  water_stress: "Water Stress",
+  unclassified: "Unclassified",
+} satisfies Record<StressClassification, string>;
+
+export function stressClassificationLabel(c: StressClassification): string {
+  return STRESS_CLASSIFICATION_LABELS[c];
+}
+
+/** `16:6316` — the popover's short id, e.g. `"42BB-37AC"` from a uuid's first 8 hex chars. */
+export function shortZoneId(id: string): string {
+  return `${id.slice(0, 4).toUpperCase()}-${id.slice(4, 8).toUpperCase()}`;
+}

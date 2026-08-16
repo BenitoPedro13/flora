@@ -70,10 +70,19 @@ test.describe("fields list panel", () => {
     await expect(page).toHaveURL(/field=/);
   });
 
-  test("View Details opens the editor pre-filled with the field's current data", async ({ page }) => {
+  test("View Details navigates to the Crop Stress screen (TASK-crop-stress §2.12)", async ({ page }) => {
     await goToFields(page);
     await page.getByPlaceholder("Search fields").fill("Field 237");
     await page.getByRole("button", { name: "View Details", exact: true }).click();
+
+    await expect(page).toHaveURL(/\/fields\/[^/]+\/stress$/);
+    await expect(page.getByRole("heading", { name: "Crop Stress" })).toBeVisible();
+  });
+
+  test("double-clicking a card opens the editor pre-filled with the field's current data (TASK-crop-stress §2.12)", async ({ page }) => {
+    await goToFields(page);
+    await page.getByPlaceholder("Search fields").fill("Field 237");
+    await page.getByTestId("field-card-Field 237").dblclick();
 
     await expect(page.getByRole("dialog")).toBeVisible();
     await expect(page.getByLabel("Name")).toHaveValue("Field 237");
@@ -143,7 +152,7 @@ test.describe("fields list panel", () => {
     await page.keyboard.press("Escape");
 
     await page.getByPlaceholder("Search fields").fill("Field 237");
-    await page.getByRole("button", { name: "View Details", exact: true }).click();
+    await page.getByTestId("field-card-Field 237").dblclick();
     await page.waitForTimeout(500);
 
     expect(errors).toEqual([]);

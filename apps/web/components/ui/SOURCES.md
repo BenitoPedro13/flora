@@ -59,6 +59,42 @@ Per the task doc's own criterion ("if it touches nothing but `chart.tsx`, run it
 extra file disqualifies the CLI path, so `chart.tsx` was fetched directly from the shadcn-ui/ui
 monorepo instead — same file, minus the unwanted sibling.
 
+## `popover`, `datepicker`, `button-group` (TASK-crop-stress)
+
+Fetched 2026-08-16 the same way as every row above.
+
+| File | Source | sha256 |
+|---|---|---|
+| `components/ui/popover.tsx` | [`alignui.com/docs/v1.2/ui/popover`](https://alignui.com/docs/v1.2/ui/popover) | `1b3fddd8b9e0afce3965b5c8876a425723f8d340551e3c38fec044d065f8036c` |
+| `components/ui/datepicker.tsx` | [`alignui.com/docs/v1.2/ui/datepicker`](https://alignui.com/docs/v1.2/ui/datepicker) | `f3536fd09275c3f1d2e2ba4772bacf1a331612bd07aac3d48e5ad03e15ca70b2` |
+| `components/ui/button-group.tsx` | [`alignui.com/docs/v1.2/ui/button-group`](https://alignui.com/docs/v1.2/ui/button-group) | `3d31b65d29c94000041949b592f91044fa859b29f4aa1765ac42bf171b383e18` |
+
+`datepicker.tsx`'s docs page lists its dependency as `react-day-picker` `"@4"` — but the vendored
+source's `classNames` keys (`caption_start`, `nav_button_previous`, `day_range_start`, …) are the
+`react-day-picker` **v8** classic API; v4 (2016-era, `peerDependencies: { react: "^15.0.0" }`) has
+no such props and predates hooks. `"@4"` reads as a docs-site extraction artifact, not a real
+constraint — confirmed against npm: `react-day-picker@8.10.2` is the last 8.x release and the
+first to list `react: "^19.0.0"` in `peerDependencies`, so that's what's installed
+(`CLAUDE.md` §2.0's "check current docs, not older examples" — this is the version resolution
+`TASK-crop-stress` §8 flagged as a risk). `date-fns@^3` pinned per the same page's second listed
+dependency, itself compatible with `react-day-picker@8.10.x`'s `"^2.28.0 || ^3.0.0"` peer range.
+
+## `alert`, `toast`, `toast-alert` (TASK-crop-stress, not in the original plan)
+
+`TASK-crop-stress.md` §2.9/§2.10 call for a toast on delete and on a failed manual refresh, but
+no toast primitive existed in this repo and §2.5's vendoring list didn't name one — an oversight
+in the plan, not a deliberate exclusion. Resolved the same way as every other gap here: checked
+AlignUI's own docs (`alignui.com/docs/v1.2/ui/toast`) rather than hand-rolling one. That page
+vendors three files (`toast.tsx` wraps `sonner`, `toast-alert.tsx` is the rendered card, and it
+depends on `alert.tsx`, itself vendored the same way) and mounts one `<Toaster />` in the root
+layout. `sonner` added as a dependency.
+
+| File | Source | sha256 |
+|---|---|---|
+| `components/ui/alert.tsx` | [`alignui.com/docs/v1.2/ui/alert`](https://alignui.com/docs/v1.2/ui/alert) | `89314ca30ffaeab62d4ac0f937a36074030da8fd51697e5a02c3ae4d36815741` |
+| `components/ui/toast.tsx` | [`alignui.com/docs/v1.2/ui/toast`](https://alignui.com/docs/v1.2/ui/toast) | `dae5767eeb24ab2a9a6ded3055ac33410148cbe989c2740d2713d52a3b49b4d9` (before the two bug fixes below) — **bug fix 1**: added an explicit `const toast: typeof sonnerToast & { custom: typeof customToast }` annotation. This repo's `packages/config/tsconfig/base.json` sets `declaration: true` project-wide (invariant: one TypeScript config source, §4), and without the annotation `tsc` fails with TS4023 — the inferred type of the spread object names `sonner`'s internal, unexported `PromiseIExtendedResult`, which can't be written to a `.d.ts`. **bug fix 2**: `defaultOptions` and `customToast`'s `options` param were typed `ToasterProps` (the `<Toaster>` *component's* global props) in the docs source; `sonnerToast.custom`'s real second parameter is `ExternalToast` (per-toast options) — a different, non-overlapping-enough type in the installed `sonner@2.0.8`. Retyped both to `ExternalToast`, which carries the same `className`/`position` fields the docs source actually sets. Neither fix changes behaviour, only the types. |
+| `components/ui/toast-alert.tsx` | [`alignui.com/docs/v1.2/ui/toast`](https://alignui.com/docs/v1.2/ui/toast) | `30c2811782c81afdce2cf2d9709e9cf5652187c537ecbb86dc89857be327344a` |
+
 ## Cross-check note
 
 `github.com/alignui/alignui-nextjs-typescript-starter` (pushed 2025-02-16, Tailwind v3-era) was

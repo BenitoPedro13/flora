@@ -1,12 +1,14 @@
-import type { BBox } from "@flora/contracts";
+import type { BBox, MultiPolygon } from "@flora/contracts";
 import {
   computeStats,
   createRasterStore,
   detectStressZones,
+  pixelToLonLat,
   rasterObjectKey,
   renderRasterPng,
   type DecodedRaster,
 } from "@flora/raster";
+import { booleanPointInPolygon, point } from "@turf/turf";
 import { sql } from "drizzle-orm";
 import { createDbClient } from "./client.js";
 import { recordRefreshResult } from "./queries/fields.js";
@@ -84,7 +86,31 @@ function isoDate(daysAgo: number): string {
   return d.toISOString().slice(0, 10);
 }
 
-function buildRaster(baseline: number, stressBlocks: StressBlock[]): DecodedRaster {
+/**
+ * The real CDSE Process API clips returned imagery to the requested field
+ * geometry server-side, which is where `raster.ts`'s "NaN = outside the
+ * field boundary" nodata convention comes from — this synthetic raster has
+ * no such server to do it, so it clips itself the same way: any pixel whose
+ * centre falls outside the field's real (non-rectangular) boundary gets
+ * `NaN`, exactly like a real response's nodata band. Found live: without
+ * this, `RasterOverlay` painted the full bbox rectangle as solid colour —
+ * visibly wrong the moment a real triangular demo field rendered next to its
+ * boundary (`TASK-crop-stress` §6 item 2's "look at it" verification, the
+ * same lesson `TASK-satellite-pipeline` §10 recorded for the ramp bug).
+ */
+function clipToBoundary(raster: DecodedRaster, bbox: BBox, boundary: MultiPolygon): void {
+  const { width, height, indexValues } = raster;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const [lon, lat] = pixelToLonLat(bbox, width, height, x + 0.5, y + 0.5);
+      if (!booleanPointInPolygon(point([lon, lat]), boundary)) {
+        indexValues[y * width + x] = NaN;
+      }
+    }
+  }
+}
+
+function buildRaster(baseline: number, stressBlocks: StressBlock[], bbox: BBox, boundary: MultiPolygon): DecodedRaster {
   const width = RASTER_SIZE_PX;
   const height = RASTER_SIZE_PX;
   const indexValues = new Float32Array(width * height).fill(baseline);
@@ -96,7 +122,9 @@ function buildRaster(baseline: number, stressBlocks: StressBlock[]): DecodedRast
       }
     }
   }
-  return { width, height, indexValues, sclValues };
+  const raster = { width, height, indexValues, sclValues };
+  clipToBoundary(raster, bbox, boundary);
+  return raster;
 }
 
 async function refreshOneObservation(
@@ -176,7 +204,7 @@ async function main() {
           // A little day-to-day variation so stats aren't bit-identical
           // across dates, without disturbing the persistent stress blocks.
           const baseline = 0.55 + 0.1 * Math.sin(i);
-          const raster = buildRaster(baseline, isStressed ? STRESS_BLOCKS : []);
+          const raster = buildRaster(baseline, isStressed ? STRESS_BLOCKS : [], boundary.bbox, boundary.boundary);
           await refreshOneObservation(tx, org.id, field.id, capturedOn, raster, boundary.bbox, rasterStore);
         }
 

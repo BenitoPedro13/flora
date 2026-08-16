@@ -12,6 +12,7 @@ import type {
   Observation,
   ObservationDates,
   RefreshAccepted,
+  RefreshJobStatus,
 } from '@flora/contracts';
 import type { Tx } from '@flora/db';
 import { CurrentUser } from '../auth/current-user.decorator.js';
@@ -53,5 +54,15 @@ export class ObservationsController {
     @Param('id', new ParseUUIDPipe()) id: string,
   ): Promise<RefreshAccepted> {
     return this.observationsService.refresh(tx, user.org, id);
+  }
+
+  @Get(':id/observations/refresh/:jobId')
+  jobStatus(
+    @TenantTx() tx: Tx,
+    @CurrentUser() user: AccessTokenClaims,
+    @Param('id', new ParseUUIDPipe()) id: string,
+    @Param('jobId') jobId: string,
+  ): Promise<RefreshJobStatus> {
+    return this.observationsService.jobStatus(tx, user.org, id, jobId);
   }
 }

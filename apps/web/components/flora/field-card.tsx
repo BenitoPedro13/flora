@@ -40,6 +40,8 @@ export interface FieldCardProps {
   selected: boolean;
   onSelect: () => void;
   onViewDetails: () => void;
+  /** Double-clicking the card opens the editor (TASK-crop-stress §2.12) — View Details now navigates to Crop Stress, so the editor needs a second entry point, mirroring the map polygon's own double-click gesture. */
+  onDoubleClick?: () => void;
 }
 
 /**
@@ -51,7 +53,7 @@ export interface FieldCardProps {
  * `success-base` ring (the Figma's per-card border, not `primary-base` —
  * confirmed on `2158:19362`, Field 239's selected state).
  */
-export function FieldCard({ field, selected, onSelect, onViewDetails }: FieldCardProps) {
+export function FieldCard({ field, selected, onSelect, onViewDetails, onDoubleClick }: FieldCardProps) {
   const cycle = field.cropCycle;
 
   return (
@@ -69,6 +71,7 @@ export function FieldCard({ field, selected, onSelect, onViewDetails }: FieldCar
         selected ? "border-success-base" : "border-stroke-soft-200",
       )}
       onClick={onSelect}
+      onDoubleClick={onDoubleClick}
     >
       <div className="flex flex-col gap-2">
         <h3 className="truncate text-title-h5 text-text-strong-950">{field.name}</h3>

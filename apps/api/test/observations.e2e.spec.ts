@@ -2,10 +2,12 @@ import type {
   Observation,
   ObservationDates,
   RefreshAccepted,
+  RefreshJobStatus,
   StressZone,
 } from '@flora/contracts';
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
+import { createRefreshQueue } from '../src/observations/refresh-queue.provider.js';
 import { asCookieHeader, relayCookies } from './cookie-utils.js';
 import { getServer } from './http.js';
 import {
@@ -101,6 +103,65 @@ describe('observations + stress-zones (e2e)', () => {
     expect(body.jobId.length).toBeGreaterThan(0);
   });
 
+  it("a manual refresh job carries attempts: 5, mirroring the worker's registration (§1.1)", async () => {
+    const { server, cookies, fieldId } = await loginAndCreateField(-96.31);
+    const refresh = await request(server)
+      .post(`/api/v1/fields/${fieldId}/observations/refresh`)
+      .set('Cookie', cookies);
+    const { jobId } = refresh.body as RefreshAccepted;
+
+    const queue = createRefreshQueue();
+    try {
+      const job = await queue.getJob(jobId);
+      expect(job?.opts.attempts).toBe(5);
+    } finally {
+      await queue.close();
+    }
+  });
+
+  it('GET /fields/:id/observations/refresh/:jobId reports a just-enqueued job as waiting or active', async () => {
+    const { server, cookies, fieldId } = await loginAndCreateField(-96.32);
+    const refresh = await request(server)
+      .post(`/api/v1/fields/${fieldId}/observations/refresh`)
+      .set('Cookie', cookies);
+    const { jobId } = refresh.body as RefreshAccepted;
+
+    const res = await request(server)
+      .get(`/api/v1/fields/${fieldId}/observations/refresh/${jobId}`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+    const body = res.body as RefreshJobStatus;
+    expect(body.jobId).toBe(jobId);
+    expect(['waiting', 'active']).toContain(body.state);
+    expect(body.failedReason).toBeNull();
+  });
+
+  it('GET /fields/:id/observations/refresh/:jobId reports a job id that aged out as unknown, not 404', async () => {
+    const { server, cookies, fieldId } = await loginAndCreateField(-96.33);
+
+    const res = await request(server)
+      .get(`/api/v1/fields/${fieldId}/observations/refresh/does-not-exist`)
+      .set('Cookie', cookies);
+    expect(res.status).toBe(200);
+    const body = res.body as RefreshJobStatus;
+    expect(body.state).toBe('unknown');
+  });
+
+  it('GET /fields/:id/observations/refresh/:jobId 404s (never 403) on a job belonging to another org', async () => {
+    const orgA = await loginAndCreateField(-96.34);
+    const orgB = await loginAndCreateField(-96.35);
+    const otherRefresh = await request(orgB.server)
+      .post(`/api/v1/fields/${orgB.fieldId}/observations/refresh`)
+      .set('Cookie', orgB.cookies);
+    const { jobId: otherJobId } = otherRefresh.body as RefreshAccepted;
+
+    const res = await request(orgA.server)
+      .get(`/api/v1/fields/${orgA.fieldId}/observations/refresh/${otherJobId}`)
+      .set('Cookie', orgA.cookies);
+    expect(res.status).toBe(404);
+    expect(res.status).not.toBe(403);
+  });
+
   it('a nonexistent field returns 404 on every observations route', async () => {
     const { server, cookies } = await loginAndCreateField(-96.4);
     const bogusId = '00000000-0000-0000-0000-000000000000';
@@ -113,6 +174,7 @@ describe('observations + stress-zones (e2e)', () => {
       ['get', `/api/v1/fields/${bogusId}/observations`],
       ['get', `/api/v1/fields/${bogusId}/observations/dates`],
       ['post', `/api/v1/fields/${bogusId}/observations/refresh`],
+      ['get', `/api/v1/fields/${bogusId}/observations/refresh/does-not-exist`],
       ['get', `/api/v1/fields/${bogusId}/stress-zones`],
     ];
     for (const [method, path] of paths) {

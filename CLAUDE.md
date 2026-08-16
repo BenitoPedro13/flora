@@ -29,27 +29,40 @@ route groups, Playwright shell tests), `TASK-domain-schema` (the ten domain tabl
 crops, fields, crop_cycles, observations, stress_zones, tasks + its three children — composite
 foreign keys, RLS, the `fields` geometry read/write pattern, seeds), `TASK-fields` (Fields &
 Crops — `1:35172`, the first spine screen: field CRUD, boundary drawing, crop cycles, the map,
-GeoJSON import), and `TASK-satellite-pipeline` (the satellite write path — `packages/satellite`
+GeoJSON import), `TASK-satellite-pipeline` (the satellite write path — `packages/satellite`
 (CDSE HTTP client), `packages/raster` (decode → stats → PNG → detection), `apps/worker`'s BullMQ
-queue and per-field scheduler, six new `apps/api` endpoints, `db:seed:satellite`) have all
-landed. Phase 0 and Phase 1 are **complete**; Phase 2 is **split into two tasks**
-(`TASK-satellite-pipeline`'s own §1.1) and the write path is done — no UI yet.
+queue and per-field scheduler, six new `apps/api` endpoints, `db:seed:satellite`), and
+`TASK-crop-stress` (the `18:6567` screen reading what that write path produces —
+`/fields/[fieldId]/stress`: the raster overlay, stress-zone map layer, colour-ramp legend, the
+map toolbar's locate/measure/zoom, the grouped detection list, the popover and its three
+mutations, the manual-refresh poll, NFR-8's stale badge) have all landed. **Phases 0, 1 and 2 are
+complete**; Phase 3 (`TASK-tasks-board`) is next.
 Email+password login with cookie sessions works end to end in a real browser, styled with
 AlignUI tokens; every tenant table is protected by the catalog test in
 `packages/db/src/queries/tenancy.spec.ts`, now a named allowlist of **two** SECURITY DEFINER
 functions (`auth_memberships_for_user`, `scheduler_fields_due_for_refresh`). `/fields` renders
 the four demo field cards (pixel-matched against the Figma), the Mapbox satellite map, the field
-editor, and GeoJSON import — all exercised live in a browser and by `apps/web/e2e/fields.spec.ts`.
-`/` still renders the one-line session sentence. Real `observations` and `stress_zones` rows
-exist for the demo fields via `db:seed:satellite`, which replays a synthetic-but-known raster
-through the real pipeline (`packages/raster`) — no CDSE credentials were available in this
-environment, so the five Sentinel Hub `[VERIFY]`s were resolved against CDSE's own current docs
-rather than a live call, and the actual live round trip (`TASK-satellite-pipeline` §6 item 1) is
-still open; see that task's §10 for the full list of what's landed vs. still open. Next:
-`TASK-crop-stress` (the `18:6567` screen, reading what this task writes) — then
-`TASK-tasks-board`. The retired prototype was deleted by `TASK-foundations` after tagging
-`prototype-v0`; `geo_spike`, the schema spike that proved the PostGIS/Drizzle round-trip, was
-retired by `TASK-domain-schema` once `fields` landed.
+editor, and GeoJSON import — all exercised live in a browser and by `apps/web/e2e/fields.spec.ts`;
+**View Details** now navigates to `/fields/[fieldId]/stress` instead of opening the editor, whose
+second entry point is double-clicking the card (`TASK-crop-stress` §2.12), mirroring the map
+polygon's own double-click gesture. `/` still renders the one-line session sentence. Real
+`observations` and `stress_zones` rows exist for the demo fields via `db:seed:satellite`, which
+replays a synthetic-but-known raster through the real pipeline (`packages/raster`) — no CDSE
+credentials were available in this environment, so the five Sentinel Hub `[VERIFY]`s were
+resolved against CDSE's own current docs rather than a live call, and the actual live round trip
+(`TASK-satellite-pipeline` §6 item 1) is still open (`TASK-satellite-live`); see that task's §10
+for the full list of what's landed vs. still open. `TASK-crop-stress` found and fixed two defects
+in the landed write path (a manual refresh never retried — the API's producer `Queue` had no
+`defaultJobOptions`, unlike the worker's registration — and `jobId` was write-only, no endpoint
+read a job back) and one in the seed script itself (the synthetic raster filled its whole
+bounding-box rectangle with valid pixels, never clipping to the field's real, possibly
+non-rectangular boundary the way a real CDSE response is clipped server-side — found live, by
+looking at a rendered field, the same lesson `TASK-satellite-pipeline` §10 recorded for its
+flat-ramp bug). Next: `TASK-tasks-board` (Phase 3) — the "create a task from this stress zone"
+button on this screen's popover is its entry point, named and deferred at `TASK-crop-stress` §5.
+The retired prototype was deleted by `TASK-foundations` after tagging `prototype-v0`;
+`geo_spike`, the schema spike that proved the PostGIS/Drizzle round-trip, was retired by
+`TASK-domain-schema` once `fields` landed.
 
 **Corrected 2026-08-15 (`TASK-design-system-shell`):** design-spec §3.2 called the neutral
 colour "Gray" — it's **Slate**. AlignUI's Gray primitive is fully achromatic; the Figma's
@@ -127,7 +140,12 @@ project's own docs before installing (§2.0).
    holding colour values are `app/globals.css`, `components/charts/config.ts`, and
    `components/map/config.ts` (design-spec §10). The last exists because Mapbox GL's paint
    properties are JSON values, not CSS classes, and its style parser does not resolve
-   `var(--color-*)` — `TASK-fields` §3.4.
+   `var(--color-*)` — `TASK-fields` §3.4. **Amended 2026-08-16 (`TASK-crop-stress` §2.2/§3.3):**
+   `packages/contracts/src/ramp.ts` also holds one raw stop set, `NDVI_RAMP_STOPS` — it is the
+   single source both the worker (encodes a PNG's pixels, not a component) and
+   `components/map/config.ts` (re-exports, doesn't declare) read from, so the legend and the
+   raster it labels can never paint from a different ramp. `apps/web` itself still has exactly
+   the three named files; a grep for raw hex under `apps/web` stays clean.
 8. **`components/ui/` is vendored.** AlignUI base components and shadcn's `chart.tsx` stay
    byte-identical to their sources. Restyle through tokens, never by editing them. Product
    composites live in `components/flora/`.
