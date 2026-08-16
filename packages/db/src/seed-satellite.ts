@@ -42,7 +42,15 @@ import { withOrganization } from "./tenancy.js";
  */
 
 const SEED_ORG_SLUG = "flora-farm";
-const OBSERVATION_COUNT = 12;
+/**
+ * TASK-home-dashboard §2.12: widened from 12 observations (60 days) to a
+ * full trailing year on Sentinel-2's real ~5-day revisit cadence — the
+ * Regeneration Score's Soil Cover Days component integrates fractional
+ * cover between consecutive observations over 365 days (packages/db/src/scoring/regeneration.ts),
+ * and two points near "today" would score a well-managed demo farm near
+ * zero for a data-availability reason, not a real one (§8's risk log).
+ */
+const OBSERVATION_COUNT = 73;
 const OBSERVATION_INTERVAL_DAYS = 5;
 const RASTER_SIZE_PX = 100;
 const EDGE_BUFFER_METRES = 10;
@@ -84,6 +92,20 @@ function isoDate(daysAgo: number): string {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() - daysAgo);
   return d.toISOString().slice(0, 10);
+}
+
+/**
+ * A smooth annual cycle (wet-season canopy peak, dry-season dip) plus small
+ * day-to-day noise — a real seasonal NDVI curve, not a flat baseline with
+ * high-frequency wiggle, so `computeSoilCoverDays`'s trapezoid integration
+ * over the trailing year has a real curve to integrate rather than a nearly
+ * constant line (§2.12).
+ */
+function seasonalNdvi(daysAgo: number): number {
+  const phase = (daysAgo / 365) * 2 * Math.PI;
+  const seasonal = 0.55 + 0.25 * Math.cos(phase);
+  const noise = 0.03 * Math.sin(daysAgo);
+  return seasonal + noise;
 }
 
 /**
@@ -200,10 +222,9 @@ async function main() {
         const observationsToWrite = isStale ? Math.floor(OBSERVATION_COUNT * 0.7) : OBSERVATION_COUNT;
 
         for (let i = observationsToWrite - 1; i >= 0; i--) {
-          const capturedOn = isoDate(i * OBSERVATION_INTERVAL_DAYS);
-          // A little day-to-day variation so stats aren't bit-identical
-          // across dates, without disturbing the persistent stress blocks.
-          const baseline = 0.55 + 0.1 * Math.sin(i);
+          const daysAgo = i * OBSERVATION_INTERVAL_DAYS;
+          const capturedOn = isoDate(daysAgo);
+          const baseline = seasonalNdvi(daysAgo);
           const raster = buildRaster(baseline, isStressed ? STRESS_BLOCKS : [], boundary.bbox, boundary.boundary);
           await refreshOneObservation(tx, org.id, field.id, capturedOn, raster, boundary.bbox, rasterStore);
         }

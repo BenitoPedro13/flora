@@ -47,6 +47,23 @@ const SEED_FARM_TIMEZONE = "America/Manaus";
 // fields.ts's ROUND((today - plantedOn) * 100 / (harvestOn - plantedOn)).
 const CYCLE_DAYS = 100;
 
+/**
+ * TASK-home-dashboard §2.12: 12 months of **harvested** history across all
+ * four seeded crops, so Crops Stocked, Planting Productivity, Gathering Rate
+ * and the Regeneration Score's crop-diversity component all have real,
+ * multi-crop data instead of "one Corn cycle, 100 days old" (which is all
+ * `DEMO_FIELDS` above produces). **Add rows; never repurpose the four
+ * growing Corn cycles or the eight non-done tasks** — `fields.spec.ts` and
+ * `apps/web/e2e/fields.spec.ts` assert on those (§6 item 14's guard).
+ *
+ * Each field rotates through the crop list in a different starting order —
+ * that's what gives the whole farm's Shannon-evenness component something
+ * to score, not just a repeated single crop across fields.
+ */
+const HISTORICAL_CROPS = ["Corn", "Wheat", "Soy", "Rice"] as const;
+const HISTORICAL_HARVEST_OFFSETS_DAYS = [330, 240, 150, 60] as const;
+const HISTORICAL_CYCLE_DAYS = 75;
+
 interface DemoField {
   name: string;
   center: [number, number];
@@ -272,6 +289,27 @@ async function main() {
           })
           .returning({ id: tasks.id });
         await enrichTask(tx, doneRow!.id, seedIndex++);
+
+        // §2.12: 12 months of harvested history, rotated per field so the
+        // farm as a whole grows all four crops across the year.
+        for (const [offsetIndex, harvestOffsetDays] of HISTORICAL_HARVEST_OFFSETS_DAYS.entries()) {
+          const cropName = HISTORICAL_CROPS[(i + offsetIndex) % HISTORICAL_CROPS.length]!;
+          const historicalCrop = cropByName.get(cropName);
+          if (!historicalCrop) {
+            throw new Error(`seed crop '${cropName}' not found — run 'pnpm db:seed' first`);
+          }
+          const harvestedOn = addDays(today, -harvestOffsetDays);
+          const historicalPlantedOn = addDays(harvestedOn, -HISTORICAL_CYCLE_DAYS);
+          await tx.insert(cropCycles).values({
+            organizationId: org.id,
+            fieldId,
+            cropId: historicalCrop.id,
+            plantedOn: isoDate(historicalPlantedOn),
+            expectedHarvestOn: isoDate(harvestedOn),
+            status: "harvested",
+            quantityKg: String(400 + i * 50 + offsetIndex * 30),
+          });
+        }
       }
     });
 
