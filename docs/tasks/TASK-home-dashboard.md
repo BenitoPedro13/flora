@@ -8,8 +8,12 @@
 > §2.6 pulls that phase's *write path* forward, so Phase 5 starts as a screen over a populated
 > table rather than as a screen-and-pipeline task.
 > **Design:** `1:12913` ("Home"), 1440×900 · design-spec §5.1, §4.1, §4.5, §6.2, §6.3, §7.2.
-> **Status:** planned 2026-08-16, against `e44aac4`. All ten §7 decisions taken 2026-08-16;
-> Part A implementation starting.
+> **Status:** planned 2026-08-16, against `e44aac4`. All ten §7 decisions taken 2026-08-16.
+> **Part A (the write path, §2.1–§2.9, §2.12) is complete and landed** across three commits
+> (`8f5748a` rollup data layer, `38f9554` weather ingest + dashboard endpoint + worker jobs,
+> `6aa6570` seed scripts) — 95 `@flora/db` tests, 3 `@flora/weather` tests, 70 `apps/api` e2e
+> tests (one pre-existing unrelated failure), 3 `apps/worker` tests, all green; `pnpm turbo run
+> typecheck build` clean across all 9 packages. Part B (§2.10–§2.14, the screen) is next.
 >
 > **Every geometry figure in §1.3 is measured** off `get_metadata`/`get_screenshot` on
 > `1:12913` (file `hY3Nd3BBbJsjpihPnfZgpd`), the same way `TASK-tasks-board` §1.3 measured the
