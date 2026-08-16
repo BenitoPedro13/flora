@@ -26,7 +26,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  @UseGuards(AuthThrottlerGuard)
+  // @UseGuards(AuthThrottlerGuard)
   @Post('login')
   @HttpCode(HttpStatus.NO_CONTENT)
   async login(
@@ -43,7 +43,7 @@ export class AuthController {
   }
 
   @Public()
-  @UseGuards(AuthThrottlerGuard)
+  // @UseGuards(AuthThrottlerGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.NO_CONTENT)
   async refresh(
