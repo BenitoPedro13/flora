@@ -49,6 +49,52 @@ describe("tenancy", () => {
       expect(unprotected).toEqual([]);
     });
 
+    it("is not vacuous — the ten TASK-domain-schema tables exist and are RLS-protected (TASK-domain-schema §6 item 10)", async () => {
+      const domainTables = [
+        "farms",
+        "crops",
+        "fields",
+        "crop_cycles",
+        "observations",
+        "stress_zones",
+        "tasks",
+        "task_assignees",
+        "task_comments",
+        "subtasks",
+      ];
+      const { rows } = await owner.pool.query<{ relname: string; relrowsecurity: boolean }>(
+        `SELECT relname, relrowsecurity FROM pg_class
+         WHERE relnamespace = 'public'::regnamespace AND relname = ANY($1)`,
+        [domainTables],
+      );
+      expect(rows.map((r) => r.relname).sort()).toEqual([...domainTables].sort());
+      for (const row of rows) {
+        expect(row.relrowsecurity).toBe(true);
+      }
+    });
+
+    it("ALTER DEFAULT PRIVILEGES covered the ten new tables with no explicit GRANT (TASK-domain-schema §6 item 11)", async () => {
+      const domainTables = [
+        "farms",
+        "crops",
+        "fields",
+        "crop_cycles",
+        "observations",
+        "stress_zones",
+        "tasks",
+        "task_assignees",
+        "task_comments",
+        "subtasks",
+      ];
+      for (const table of domainTables) {
+        const { rows } = await owner.pool.query<{ has_privilege: boolean }>(
+          `SELECT has_table_privilege('flora_app', $1, 'SELECT,INSERT,UPDATE,DELETE') AS has_privilege`,
+          [table],
+        );
+        expect(rows[0]!.has_privilege).toBe(true);
+      }
+    });
+
     it("catches a scratch table added without a policy — demonstrating a real failure", async () => {
       const client = new Client({ connectionString: infra.ownerUrl });
       await client.connect();

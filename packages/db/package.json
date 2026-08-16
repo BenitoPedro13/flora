@@ -17,8 +17,8 @@
     "generate": "dotenv -e ../../.env -- drizzle-kit generate",
     "migrate": "dotenv -e ../../.env -- tsx src/migrate.ts",
     "studio": "dotenv -e ../../.env -- drizzle-kit studio",
-    "spike:roundtrip": "dotenv -e ../../.env -- tsx src/queries/spike-roundtrip.ts",
-    "seed": "dotenv -e ../../.env -- tsx src/seed.ts"
+    "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
+    "seed:demo": "dotenv -e ../../.env -- tsx src/seed-demo.ts"
   },
   "dependencies": {
     "@flora/contracts": "workspace:*",

@@ -247,13 +247,27 @@ projecting every select through `ST_AsGeoJSON(...)::json`.
 The spike test proved the full chain on a known `MultiPolygon`: insert → read back is
 structurally equal GeoJSON, and PostGIS `ST_Area` agrees with `turf.area` on the same polygon to
 within 0.15% (well inside the 0.5% acceptance bar). A GIST bounding-box query on the spike table
-confirmed an index scan via `EXPLAIN`, not a sequential scan.
+confirmed an index scan via `EXPLAIN`, not a sequential scan. **`TASK-domain-schema` (2026-08-15)
+retired the spike** once `fields` landed — the same assertions now run against the real table in
+`packages/db/src/queries/fields.spec.ts`.
 
 ### 5.3 Table notes
 
 **`organizations`** — tenant root. Every tenant-scoped table carries `organization_id`,
 denormalised onto leaf tables deliberately so tenancy predicates and index prefixes never
 require a join. Row-Level Security on every such table.
+
+**Composite foreign keys, added `TASK-domain-schema` (2026-08-15).** Denormalising
+`organization_id` onto leaves has a correctness cost RLS alone doesn't cover: a policy checks
+`organization_id = app_current_org()` on the row in front of it, with no opinion on whether that
+value matches the row's *parent*. Every child table's FK is therefore composite —
+`FOREIGN KEY (organization_id, field_id) REFERENCES fields (organization_id, id)` — which
+requires `unique (organization_id, id)` on every parent and turns a bad cross-tenant `INSERT`
+into a constraint violation instead of a silent leak. `tasks.field_id` is the one nullable case:
+its FK uses PG16's column-list `ON DELETE SET NULL (field_id)`, nulling only that column so
+`organization_id NOT NULL` survives a field's deletion. `task_assignees`/`task_comments`
+reference `memberships (organization_id, user_id)`, not `users (id)`, so an assignee is provably
+a member of the owning org.
 
 **`farms`** — name, `location geography(Point,4326)`, `timezone` (IANA).
 
@@ -267,12 +281,19 @@ and an audit of every numeric display.
 **`fields`** — `boundary geography(MultiPolygon,4326)`. MultiPolygon, not Polygon: real fields
 get split by roads and watercourses and frequently have holes. Acreage is **derived** via
 `ST_Area(boundary)` at read time — never stored, because a stored area silently diverges the
-moment a boundary is edited. GIST index on `boundary`.
+moment a boundary is edited. GIST index on `boundary`. Also carries `last_refresh_at`,
+`last_refresh_succeeded_at` and `last_refresh_error` (`TASK-domain-schema`, 2026-08-15): NFR-8's
+stale badge needs the last-*success* date, never a zero, and that can't be derived from
+`max(observations.captured_on)` — a refresh that ran successfully and found no new cloud-free
+scene is healthy and would otherwise read as stale.
 
 **`crop_cycles`** — `field_id`, `crop_id`, `planted_on`, `expected_harvest_on`, `status`
-(`planned | growing | harvested | failed`), `growth_pct`, `quantity_kg`. Drives the field
-card's "Growth 30%", "Specie Planted: Corn", "Crops Quantity 1.9 T". A field has at most one
-`growing` cycle — enforced by a partial unique index, not application logic.
+(`planned | growing | harvested | failed`), `quantity_kg`. Drives the field card's
+"Specie Planted: Corn", "Crops Quantity 1.9 T". A field has at most one `growing` cycle —
+enforced by a partial unique index, not application logic. **`growth_pct` is derived, not a
+column (resolved Q10, 2026-08-15)**: computed from `planted_on`/`expected_harvest_on`, the same
+reasoning that keeps `area` out of `fields` — a stored percentage diverges the moment either
+date is edited.
 
 **`observations`** — the central time series.
 `(organization_id, field_id, captured_on, index, stats jsonb, raster_key text, bbox jsonb,
@@ -526,11 +547,17 @@ export const fieldSchema = z.object({
   id: z.uuid(),
   name: z.string().min(1).max(120),
   boundary: multiPolygonSchema,
-  areaHectares: z.number(),          // derived server-side, never accepted on write
+  areaM2: z.number(),                // derived server-side, never accepted on write
   centroid: pointSchema,
 })
 export type Field = z.infer<typeof fieldSchema>
 ```
+
+**Corrected 2026-08-15 (`TASK-domain-schema`):** this example previously showed `areaHectares`,
+contradicting §5.3's store-SI/display-acres decision made the same day. The API returns
+`areaM2` (exactly what `ST_Area` on a `geography` produces, §5.2) and the UI converts through
+`packages/contracts/src/units.ts`. `fieldSchema` itself isn't written yet — `TASK-fields` writes
+it against this corrected shape.
 
 **Resolved 2026-08-15 (`TASK-auth-tenancy`):** zod is **4.4.3**; **`nestjs-zod` 5.5.0** declares
 `zod: "^3.25.0 || ^4.0.0"` as a peer, so it is used directly — `createZodDto()` for request
@@ -865,7 +892,7 @@ everything else is sequenced by how directly it serves them.
 
 | Phase | Deliverable | Screens |
 |---|---|---|
-| **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell — **landed 2026-08-15** (`TASK-foundations`, `TASK-auth-tenancy`, `TASK-design-system-shell`); `TASK-domain-schema` still open | shell |
+| **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell, domain schema (farms/crops/fields/crop_cycles/observations/stress_zones/tasks + children, composite FKs, RLS) — **landed 2026-08-15** (`TASK-foundations`, `TASK-auth-tenancy`, `TASK-design-system-shell`, `TASK-domain-schema`) — **complete** | shell |
 | **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, import, crop cycles, growth/species/quantity, Mapbox list + map | `1:35172` |
 | **2 — Crop Stress** | `packages/satellite`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, detection review UI | `18:6567` |
 | **3 — Tasks** | Task domain scoped to fields, board with drag, list, timeline, watering volumes (§4.4) | `24:11420` |
@@ -898,6 +925,7 @@ computes yet (§17 Q4).
 | ~~Q7~~ | ~~Mobile~~ — **RESOLVED 2026-08-15: desktop-only in v1, built to retrofit cheaply.** See §9.6. | — |
 | Q8 | Who computes nitrogen prescriptions (§4.1) | Phase 6 |
 | Q9 | What sends transactional email? Password reset and invitations both need a provider; neither is in scope for `TASK-auth-tenancy` (§10) and none has been chosen. | First task needing either |
+| ~~Q10~~ | ~~`crop_cycles.growth_pct` — stored or derived?~~ — **RESOLVED 2026-08-15: derived**, computed from `planted_on`/`expected_harvest_on` in `packages/db/src/queries/`, not a column — the same reasoning that keeps `area` out of `fields` (§5.3). Revisit only if growth is meant as an operator-observed stage rather than calendar progress. | — |
 | — | ~~What produces energy readings~~ — moot while Energy is deferred (§4.3) | deferred |
 
 ---

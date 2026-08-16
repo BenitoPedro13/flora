@@ -23,15 +23,18 @@ Energy sits off that loop and has no data source (architecture §4.3). Do not bu
 either without re-opening the decision.
 
 **Status (2026-08-15):** `TASK-foundations` (monorepo, infra, Drizzle+PostGIS skeleton),
-`TASK-auth-tenancy` (identity, sessions, RLS enforced twice), and `TASK-design-system-shell`
+`TASK-auth-tenancy` (identity, sessions, RLS enforced twice), `TASK-design-system-shell`
 (AlignUI token chain, vendored base components, `AppSidebar`/`PageHeader`, the `(app)`/`(auth)`
-route groups, Playwright shell tests) have all landed. Email+password login with cookie
-sessions works end to end in a real browser, styled with AlignUI tokens; every tenant table is
-protected by the catalog test in `packages/db/src/queries/tenancy.spec.ts`. `/` still renders
-the one-line session sentence — inside the finished shell; no screen has been built yet. Next:
-`TASK-domain-schema`, then the build spine (`TASK-fields` → `TASK-crop-stress` →
-`TASK-tasks-board`). The retired prototype was deleted by `TASK-foundations` after tagging
-`prototype-v0`.
+route groups, Playwright shell tests), and `TASK-domain-schema` (the ten domain tables — farms,
+crops, fields, crop_cycles, observations, stress_zones, tasks + its three children — composite
+foreign keys, RLS, the `fields` geometry read/write pattern, seeds) have all landed. Phase 0 is
+**complete**. Email+password login with cookie sessions works end to end in a real browser,
+styled with AlignUI tokens; every tenant table — all fourteen of them now — is protected by the
+catalog test in `packages/db/src/queries/tenancy.spec.ts`. `/` still renders the one-line
+session sentence — inside the finished shell; no screen has been built yet. Next: the build
+spine, `TASK-fields` → `TASK-crop-stress` → `TASK-tasks-board`. The retired prototype was
+deleted by `TASK-foundations` after tagging `prototype-v0`; `geo_spike`, the schema spike that
+proved the PostGIS/Drizzle round-trip, was retired by `TASK-domain-schema` once `fields` landed.
 
 **Corrected 2026-08-15 (`TASK-design-system-shell`):** design-spec §3.2 called the neutral
 colour "Gray" — it's **Slate**. AlignUI's Gray primitive is fully achromatic; the Figma's
@@ -45,9 +48,9 @@ design-spec §6.2 has the mapping. `AppSidebar` and `PageHeader` (`components/fl
 real work and are built — 11 base components + `chart.tsx` are vendored in `components/ui/`
 with sources tracked in `components/ui/SOURCES.md`.
 
-Next up: `docs/tasks/TASK-domain-schema.md` (not yet written) — the Drizzle schema for fields,
-crops, tasks etc., blocked on `TASK-auth-tenancy`'s `packages/db/src/tenancy.ts` (every tenant
-table must go through it). After that, the build spine per architecture §16.
+Next up: the build spine per architecture §16 — `TASK-fields`, then `TASK-crop-stress`, then
+`TASK-tasks-board`. `TASK-fields` is unblocked: the domain schema, `packages/db/src/queries/fields.ts`,
+and `packages/contracts`'s enums/units are all in place.
 
 ### Why the stack changed
 

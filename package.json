@@ -24,8 +24,8 @@
     "db:generate": "pnpm --filter @flora/db run generate",
     "db:migrate": "pnpm --filter @flora/db run migrate",
     "db:studio": "pnpm --filter @flora/db run studio",
-    "db:spike": "pnpm --filter @flora/db run spike:roundtrip",
     "db:seed": "pnpm --filter @flora/db run seed",
+    "db:seed:demo": "pnpm --filter @flora/db run seed:demo",
 
     "setup": "pnpm install && pnpm run infra:up && pnpm run infra:wait && pnpm run db:migrate"
   },
