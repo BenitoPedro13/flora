@@ -1,82 +1,74 @@
-# Flora
+# 🌱 Flora
 
-An operations console for a regenerative farm — fields, crops, satellite-derived crop health,
-tasks, and weather.
+**An operations console for regenerative farming** — fields, crops, satellite-derived crop
+health, tasks, and weather, in one place.
 
-**Status:** Phases 0 through 4 are complete. Foundations
-(`docs/tasks/TASK-foundations.md`), identity/tenancy (`docs/tasks/TASK-auth-tenancy.md`), the
-design-system shell (`docs/tasks/TASK-design-system-shell.md`), the domain schema
-(`docs/tasks/TASK-domain-schema.md`), Fields & Crops (`docs/tasks/TASK-fields.md`), the
-satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`), the Crop Stress
-screen (`docs/tasks/TASK-crop-stress.md`), the live CDSE round-trip fix
-(`docs/tasks/TASK-satellite-live.md`), the Tasks board
-(`docs/tasks/TASK-tasks-board.md`), and Home (`docs/tasks/TASK-home-dashboard.md`) have all
-landed:
-pnpm/Turborepo monorepo, Docker infra, the ten domain tables (farms, crops, fields, crop_cycles,
-observations, stress_zones, tasks + its three children) with composite foreign keys and RLS,
-email+password login with cookie sessions, row-level security enforced twice (repository filter
-+ Postgres RLS) for every tenant table, the AlignUI token chain + `AppSidebar`/`PageHeader` shell
-every screen renders into, `/fields` — field CRUD, Mapbox boundary drawing, crop cycles,
-cursor-paginated search/sort/filter, and GeoJSON import (preview-then-commit) —
-`packages/satellite` (the CDSE HTTP client) + `packages/raster` (decode → stats → PNG →
-detection) + `apps/worker`'s BullMQ queue and scheduler + seven `apps/api` endpoints, and now
-`/fields/[fieldId]/stress` (`18:6567`) reading all of it: the NDVI raster overlay clipped to the
-field boundary, the stress-zone map layer, the colour-ramp legend, the map toolbar
-(locate/measure/zoom), the classification-grouped detection list, the popover with
-classify/mute/delete, a manual-refresh button that polls to completion, and NFR-8's stale badge.
-`db:seed:satellite` replays a synthetic fixture through the real pipeline for offline
-development — no CDSE credentials needed locally. `TASK-satellite-live` closed the one real gap
-in that write path: `packages/satellite/src/cdse/process.ts` now sends `Accept: application/tar`
-and extracts the two named TAR members CDSE actually returns, instead of the bare-TIFF/`res.formData()`
-mismatch that failed every real refresh; a manual refresh on Field 237 now completes end to end
-against a real account and writes a real observation. `/tasks` (`24:11420`) closes the spine:
-a Kanban board over the task domain — five `apps/api` endpoints, server-computed drag positions
-(`PATCH /tasks/:id/move`), and `tasks.water_volume_m3` sourcing Phase 4's Water Used tile. List
-and Timeline views and Import ship disabled (undesigned); the board's own NFR-10 baseline is a
-real Figma export this environment could finally reach. `/` (`1:12913`) now renders the real
-Home screen — the KPI row, Crops Stocked donut, Regeneration Score (a real published-indicator
-formula, not an invented composite — architecture §5.4), Planting Productivity, Weather, real
-top-crop Gathering Rate, and live Pending Tasks — reading a new daily rollup (`buildFarmRollup`,
-computed by a worker job or inline on a farm's first-ever login) plus a new `packages/weather`
-Open-Meteo ingest. Next: Weather (`TASK-weather`, Phase 5) — the write path already stores the
-full 7-day forecast Home doesn't read; the "create a task from this stress zone" action on the
-Crop Stress popover is `TASK-stress-to-task`'s entry point, buildable since Tasks has a create
-path.
-See `docs/architecture.md` (system, v2) and
-`docs/design-spec.md` (visual) for the full picture — `CLAUDE.md` for how work happens in this
-repo.
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat&logo=typescript&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js%2016-000000?style=flat&logo=next.js&logoColor=white)
+![NestJS](https://img.shields.io/badge/NestJS-E0234E?style=flat&logo=nestjs&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL%20%2B%20PostGIS-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
 
-## Stack
+Flora replaces spreadsheets and gut-feel with real satellite imagery, weather data, and a task
+pipeline built around how a farm actually runs: register a crop, watch it struggle, act on it.
 
-pnpm workspaces + Turborepo · Next.js 16 (`apps/web`) · NestJS (`apps/api`, `apps/worker`) ·
-PostgreSQL 16 + PostGIS 3.4 via Drizzle ORM (`packages/db`) · Redis 7 · Sentinel Hub ·
-Mapbox GL JS · Zod contracts (`packages/contracts`). Full rationale in architecture.md §2–§3.
+---
+
+## What it does
+
+- 🗺️ **Fields & Crops** — draw field boundaries on a live map, track crop cycles, import
+  GeoJSON
+- 🛰️ **Crop Stress** — Sentinel-2 satellite imagery processed into ten spectral indices
+  (NDVI, NDRE, NDMI, EVI, and more), clipped to each field and rendered as a colour-ramped
+  overlay with detected stress zones
+- ✅ **Tasks** — a drag-and-drop Kanban board tying work back to fields and crop cycles
+- 📊 **Home** — a farm-wide dashboard: regeneration score, crops stocked, water used, planting
+  productivity, gathering rate
+- ⛅ **Weather** — a 7-day forecast from Open-Meteo: wind, UV, rain probability, pressure, and
+  sun position, all real values, sourced against published scales (WHO/WMO UV bands, NOAA/NWS
+  rain terminology) rather than invented ones
+
+Every number on screen is either real data or an honest empty state — nothing is fabricated to
+fill a chart.
+
+## Tech stack
+
+| Layer | Choice |
+|---|---|
+| Monorepo | pnpm workspaces + Turborepo |
+| Web | Next.js 16 (App Router) · React 19 · TypeScript |
+| API | NestJS |
+| Worker | NestJS standalone, BullMQ |
+| Database | PostgreSQL 16 + PostGIS 3.4, via Drizzle ORM |
+| Queue / cache | Redis 7 |
+| Satellite imagery | Sentinel Hub via Copernicus Data Space Ecosystem |
+| Weather | Open-Meteo |
+| Maps | Mapbox GL JS |
+| Design system | AlignUI on Tailwind CSS v4 |
+| Contracts | Zod, shared between API and web — no codegen, no drift |
+
+Full architecture and design rationale: [`docs/architecture.md`](docs/architecture.md) and
+[`docs/design-spec.md`](docs/design-spec.md).
 
 ## Quick start
 
 Prerequisites: Node 24+, pnpm, Docker.
 
 ```bash
-cp .env.example .env   # fill in placeholders; see infra/README.md for the local ones
-pnpm setup              # install deps, start infra, run migrations
-pnpm db:seed             # first organization + owner login (owner@flora.local), one farm, four crops
-pnpm db:seed:demo        # four demo fields (or 12mo harvested history backfilled onto your own, if any exist) — optional
-pnpm db:seed:satellite   # a year of observations + stress zones, via the real pipeline — optional, run after db:seed:demo
-pnpm db:seed:rollups     # the real buildFarmRollup for the trailing 30 days — optional, run after db:seed:satellite
-pnpm db:seed:weather     # one real Open-Meteo call per farm — optional
-pnpm dev                 # apps/web on :3000, apps/api on :3001, apps/worker standalone
+cp .env.example .env    # fill in placeholders; see infra/README.md for the local ones
+pnpm setup               # install deps, start infra, run migrations
+pnpm db:seed              # first organization + owner login (owner@flora.local), one farm, four crops
+pnpm db:seed:demo         # demo fields with 12 months of harvested history — optional
+pnpm db:seed:satellite    # a year of observations + stress zones, via the real pipeline — optional
+pnpm db:seed:rollups      # backfills the Home dashboard's KPI deltas — optional
+pnpm db:seed:weather      # one real Open-Meteo call per farm — optional
+pnpm dev                  # apps/web on :3000, apps/api on :3001, apps/worker standalone
 ```
 
-`pnpm setup` is `pnpm install && pnpm infra:up && pnpm infra:wait && pnpm db:migrate` — run the
-steps individually if you want to see each one. `pnpm dev` builds `packages/*` first (Turbo's
-`dev` task depends on `^build`): `apps/api`/`apps/worker` run through NestJS's own compiler
-(needed for `emitDecoratorMetadata`, which esbuild-based tools like `tsx` don't implement), so
-`packages/config`/`db`/`contracts` must exist as compiled JS, not raw TypeScript, for `nest
-start` to resolve them.
+Then log in at `localhost:3000/login` with the credentials `pnpm db:seed` prints.
 
-Log in at `localhost:3000/login` with the seeded credentials `pnpm db:seed` printed.
-
-## Commands
+<details>
+<summary>Command reference</summary>
 
 | Command | Does |
 |---|---|
@@ -89,30 +81,41 @@ Log in at `localhost:3000/login` with the seeded credentials `pnpm db:seed` prin
 | `pnpm db:migrate` | Apply pending SQL migrations (`packages/db/migrations`) |
 | `pnpm db:generate` | `drizzle-kit generate` — always review the output before committing |
 | `pnpm db:studio` | Drizzle Studio against the local database |
-| `pnpm db:seed` | Create the first organization, owner login, farm, and crops, if they don't exist yet |
-| `pnpm db:seed:demo` | Add four demo fields matched to the Fields screen's Figma cards if the org has none yet; either way, backfill 12 months of harvested crop-cycle history onto whatever fields the org actually has (idempotent per cycle) — run after `db:seed` |
-| `pnpm db:seed:satellite` | Replay a year of a synthetic-but-known seasonal raster through the real pipeline into `observations`/`stress_zones`, on Sentinel-2's real ~5-day revisit cadence — run after `db:seed:demo`; needs no CDSE credentials |
-| `pnpm db:seed:rollups` | Replay the real `buildFarmRollup` for the trailing 30 days — what makes Home's KPI deltas real numbers instead of a first-login build; run after `db:seed:satellite` |
-| `pnpm db:seed:weather` | One real, keyless Open-Meteo call per farm — gives Home's Weather card real data without waiting on the hourly worker schedule |
-| `pnpm db:seed:bulk` | Add 200 more fields on a grid (pagination and NFR-11 fixtures) — run after `db:seed` |
-| `pnpm --filter web test:e2e` | Playwright e2e tests (`apps/web/e2e/`) — needs `apps/api` + infra running and `pnpm db:seed && pnpm db:seed:demo`; run `pnpm --filter web exec playwright install chromium` once first |
+| `pnpm db:seed:bulk` | Add 200 more fields on a grid (pagination fixtures) |
+| `pnpm --filter web test:e2e` | Playwright e2e tests — needs `apps/api` + infra running |
 
-More detail on the infra stack, including why the local `db` image differs from CI's, is in
-`infra/README.md`.
+More on the infra stack, including why the local `db` image differs from CI's, in
+[`infra/README.md`](infra/README.md).
+
+</details>
 
 ## Project structure
 
 ```
 apps/
-  web/          Next.js — AlignUI shell, screens, Mapbox, charts
+  web/          Next.js — design-system shell, screens, Mapbox, charts
   api/          NestJS — controllers, services, auth
   worker/       NestJS standalone — BullMQ consumers + schedules
 packages/
-  contracts/    zod schemas + inferred types (the API contract)
+  contracts/    Zod schemas + inferred types (the API contract)
   db/           Drizzle schema, client, migrations, PostGIS queries
   config/       shared tsconfig, eslint, prettier, env schema
 infra/          docker-compose — Postgres+PostGIS, Redis, MinIO
 docs/           architecture.md, design-spec.md, tasks/
 ```
 
-Full conventions, invariants, and workflow in `CLAUDE.md`.
+## Status
+
+| Phase | Screen | Status |
+|---|---|---|
+| 0 | Foundations, auth, design system, domain schema | ✅ |
+| 1 | Fields & Crops | ✅ |
+| 2 | Crop Stress (satellite imagery, 10 spectral indices) | ✅ |
+| 3 | Tasks board | ✅ |
+| 4 | Home dashboard | ✅ |
+| 5 | Weather | ✅ |
+| — | Energy, Carbon Offset | deferred (no data source yet) |
+
+Every phase is documented end to end in [`docs/tasks/`](docs/tasks/) — what was planned, why,
+and what was found once it hit a real browser. Workflow and repo conventions are in
+[`CLAUDE.md`](CLAUDE.md).
