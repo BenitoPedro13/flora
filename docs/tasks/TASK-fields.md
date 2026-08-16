@@ -686,7 +686,7 @@ editor. `[VERIFY]`s resolved before code, per CLAUDE.md §2.0: `react-map-gl@8.1
 export — `react-map-gl/mapbox` — confirmed against the installed package's own `.d.ts`, not
 guessed.
 
-**Two real bugs found by testing this live in a browser, not just by lint/typecheck:**
+**Real bugs found by testing this live in a browser, not just by lint/typecheck:**
 1. `field-map.tsx`'s `setFeatureState`/`removeFeatureState` and `draw-control.tsx`'s
    `draw.add()` both threw `"Style is not done loading"` as an uncaught error when called before
    Mapbox's `load` event — `mapRef.current` (and `useControl`'s `onAdd`) fire before that. Fixed
@@ -696,6 +696,19 @@ guessed.
    because a prop change alone doesn't re-run a `useState` initializer. Fixed with
    `key={`${editingField?.id ?? "new"}-${editorOpenCount}`}` on the `<FieldEditor>` call in
    `field-list-panel.tsx`, forcing a remount every time the editor opens.
+3. **Found only once a real Mapbox token replaced the dev placeholder** (the placeholder token
+   never got a style to load, so this whole code path was silently never exercised until then):
+   `draw-control.tsx`'s original `useControl`-based version stashed the `MapboxDraw` instance in
+   a ref from inside `onCreate` — a `useMemo` initializer. React 19 dev StrictMode
+   double-invokes `useMemo` initializers, and writing to a ref from inside one is exactly the
+   impure-during-render pattern React's docs warn about: the ref ended up holding a *different*
+   `MapboxDraw` instance than the one `useControl` actually passed to `map.addControl()`, so
+   `.add()` crashed reading `ctx.store` (`Cannot read properties of undefined (reading 'get')`,
+   inside mapbox-gl-draw's own `api.add()`) on an instance that was never wired up. Fixed by
+   dropping `useControl` for a single plain `useEffect` that creates one instance and uses that
+   same local `const` for everything — no separate hook-call boundaries for the instance to go
+   stale across. `DrawControl` now takes the loaded `MapRef` as a prop instead of resolving one
+   itself, so the parent only renders it once `onLoad` has actually fired.
 
 **One accessibility bug, caught by a test locator's *false positive* revealing a real anti-pattern:**
 `FieldCard`'s root `<div>` had `role="button"` and wrapped a real `<button>` (View Details) — a
@@ -741,3 +754,13 @@ open clean; keyboard reachability with a visible focus ring on the toolbar and c
 uncaught page error across every one of those interactions. 22/22 Playwright tests pass
 (`shell.spec.ts` unmodified, `fields.spec.ts` new) — see that file's own header for exactly
 which §6 items it does and doesn't cover.
+
+**Re-verified with a real `NEXT_PUBLIC_MAPBOX_TOKEN`** (the dev-placeholder value used for the
+initial pass never let a style load, which is exactly what masked bug 3 above): satellite
+imagery, the four white field boundaries with their label pills, and both `mapbox-gl-draw` paths
+— preloading an existing boundary for editing (Field 237: `18.19 ac drawn`) and drawing a brand
+new one from scratch (`+ Add Field`, click-click-click-double-click: `8.95 ac drawn`) — all
+render and compute correctly with no console or page errors. `growth %`'s exact value is
+date-relative and was seen to have already drifted from the seed day's 30%/80%/10%/40% to
+31%/81%/11%/41% one calendar day later — `fields.spec.ts`'s assertion was tightened from an
+exact string to a range check for exactly this reason, not loosened arbitrarily.

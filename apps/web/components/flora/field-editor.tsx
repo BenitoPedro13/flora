@@ -25,7 +25,7 @@ import * as Modal from "@/components/ui/modal";
 import * as Select from "@/components/ui/select";
 import { DrawControl } from "@/components/map/draw-control";
 import { MapPlaceholder } from "@/components/map/map-placeholder";
-import { Map as MapboxMap } from "react-map-gl/mapbox";
+import { Map as MapboxMap, type MapRef } from "react-map-gl/mapbox";
 import bbox from "@turf/bbox";
 import "mapbox-gl/dist/mapbox-gl.css";
 
@@ -52,6 +52,15 @@ function BoundaryMap({
   onChange: (boundary: MultiPolygon | null, areaM2: number | null) => void;
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+  const mapRef = React.useRef<MapRef | null>(null);
+  // DrawControl needs a *loaded* map (mapbox-gl-draw's own onAdd sets up
+  // its internal store synchronously, but the style — and the source it
+  // needs before `.add()` can preload a boundary — isn't ready until
+  // `load` fires). Rendering it only once loaded, with the resolved
+  // instance as a prop, also sidesteps the useMemo/ref staleness bug
+  // draw-control.tsx's own comment documents.
+  const [loadedMap, setLoadedMap] = React.useState<MapRef | null>(null);
+
   const initialViewState = React.useMemo(() => {
     if (initialBoundary) {
       const [west, south, east, north] = bbox(initialBoundary);
@@ -73,13 +82,15 @@ function BoundaryMap({
 
   return (
     <MapboxMap
+      ref={mapRef}
       mapboxAccessToken={token}
       mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
       pitch={0}
       initialViewState={initialViewState}
+      onLoad={() => setLoadedMap(mapRef.current)}
       style={{ width: "100%", height: 260 }}
     >
-      <DrawControl initialBoundary={initialBoundary} onChange={onChange} />
+      {loadedMap ? <DrawControl map={loadedMap} initialBoundary={initialBoundary} onChange={onChange} /> : null}
     </MapboxMap>
   );
 }
