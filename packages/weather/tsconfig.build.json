@@ -1,0 +1,9 @@
+{
+  "extends": "@flora/config/tsconfig/library.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "exclude": ["**/*.spec.ts"]
+}

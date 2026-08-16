@@ -31,6 +31,23 @@ export const envSchema = z.object({
     .string()
     .optional()
     .transform((v) => v === "true"),
+  // TASK-home-dashboard §2.9/§2.6 — same "off by default in dev" reasoning
+  // as SATELLITE_SCHEDULE_ENABLED, though neither rollups nor Open-Meteo
+  // calls have a quota to protect; the default just keeps a laptop quiet.
+  ROLLUP_SCHEDULE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  WEATHER_SCHEDULE_ENABLED: z
+    .string()
+    .optional()
+    .transform((v) => v === "true"),
+  // Only apps/weather's fixture tests override this — unset (or blank, as
+  // .env.example ships it) in every real environment, where OpenMeteoProvider
+  // falls back to the real API. Not `.url()`: an empty string from a copied
+  // .env.example must parse as "absent", not fail boot (CDSE_CLIENT_ID's
+  // same pattern above).
+  OPEN_METEO_BASE_URL: z.string().optional(),
   // HS256 signing key for access + refresh tokens (architecture §10). ≥32 bytes so
   // it carries enough entropy for HMAC-SHA256 — shorter keys are brute-forceable.
   JWT_SIGNING_KEY: z.string().min(32),

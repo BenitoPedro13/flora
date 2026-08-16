@@ -32,3 +32,14 @@ export async function listFarms(tx: Tx, organizationId: string): Promise<FarmRec
     timezone: row.timezone,
   }));
 }
+
+/** `GET /farms/:id/dashboard`'s 404 check (NFR-7) — TASK-home-dashboard §2.8. */
+export async function getFarm(tx: Tx, organizationId: string, id: string): Promise<FarmRecord | null> {
+  const rows = await tx.execute<FarmRow>(sql`
+    SELECT id, name, ST_AsGeoJSON(location)::json AS location, timezone
+    FROM farms
+    WHERE organization_id = ${organizationId} AND id = ${id}
+  `);
+  const row = rows.rows[0];
+  return row ? { id: row.id, name: row.name, location: row.location, timezone: row.timezone } : null;
+}

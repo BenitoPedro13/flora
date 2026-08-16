@@ -4,3 +4,4 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
 export const DATABASE = Symbol('DATABASE');
 export const SATELLITE_PROVIDER = Symbol('SATELLITE_PROVIDER');
 export const RASTER_STORE = Symbol('RASTER_STORE');
+export const WEATHER_PROVIDER = Symbol('WEATHER_PROVIDER');

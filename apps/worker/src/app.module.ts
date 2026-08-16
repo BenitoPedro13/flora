@@ -5,15 +5,23 @@ import { Redis } from 'ioredis';
 import { Pool } from 'pg';
 import { CdseSatelliteProvider } from '@flora/satellite';
 import { createRasterStore } from '@flora/raster';
+import { OpenMeteoProvider } from '@flora/weather';
+import { RollupQueueModule } from './queue/rollups.queue.js';
 import { SatelliteQueueModule } from './queue/satellite.queue.js';
+import { WeatherQueueModule } from './queue/weather.queue.js';
+import { RollupProcessor } from './rollups/rollup.processor.js';
+import { RollupSchedulerService } from './rollups/rollup-scheduler.service.js';
 import { RefreshProcessor } from './satellite/refresh.processor.js';
 import { SchedulerService } from './satellite/scheduler.service.js';
+import { WeatherIngestProcessor } from './weather/weather-ingest.processor.js';
+import { WeatherSchedulerService } from './weather/weather-scheduler.service.js';
 import {
   DATABASE,
   PG_POOL,
   RASTER_STORE,
   REDIS_CLIENT,
   SATELLITE_PROVIDER,
+  WEATHER_PROVIDER,
 } from './tokens.js';
 
 const logger = new Logger('AppModule');
@@ -28,10 +36,16 @@ const logger = new Logger('AppModule');
       connection: parseRedisUrl(process.env.REDIS_URL!),
     }),
     SatelliteQueueModule,
+    RollupQueueModule,
+    WeatherQueueModule,
   ],
   providers: [
     RefreshProcessor,
     SchedulerService,
+    RollupProcessor,
+    RollupSchedulerService,
+    WeatherIngestProcessor,
+    WeatherSchedulerService,
     {
       provide: PG_POOL,
       // env is validated once at boot in main.ts, before this module is
@@ -85,6 +99,15 @@ const logger = new Logger('AppModule');
           secretAccessKey: process.env.S3_SECRET_ACCESS_KEY!,
           bucket: process.env.S3_BUCKET!,
         }),
+    },
+    {
+      // No credentials needed for non-commercial use (§2.6) — unlike
+      // SATELLITE_PROVIDER there's no failure-mode warning to log here.
+      provide: WEATHER_PROVIDER,
+      // `|| undefined`, not `??`: an unset var loaded via .env.example's
+      // blank line arrives as `""`, not `undefined` — OpenMeteoProvider's
+      // own `??` fallback to the real API only fires on nullish.
+      useFactory: () => new OpenMeteoProvider(process.env.OPEN_METEO_BASE_URL || undefined),
     },
   ],
 })

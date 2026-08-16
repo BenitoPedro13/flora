@@ -409,6 +409,24 @@ const REGISTRY: RegistryEntry[] = [
     },
   },
   {
+    name: 'GET /farms/:id/dashboard',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const [farmA, farmB] = await Promise.all([
+        seedFarmAndCrop(orgA.organizationId),
+        seedFarmAndCrop(orgB.organizationId),
+      ]);
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      return {
+        cookies: cookiesA,
+        method: 'get',
+        ownPath: `/api/v1/farms/${farmA.farmId}/dashboard`,
+        otherPath: `/api/v1/farms/${farmB.farmId}/dashboard`,
+      };
+    },
+  },
+  {
     name: 'PATCH /tasks/:id',
     build: async (app) => {
       const orgA = await seedUserWithOrg('owner');

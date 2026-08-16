@@ -587,6 +587,14 @@ export async function deleteField(tx: Tx, organizationId: string, id: string): P
   await tx.execute(sql`DELETE FROM fields WHERE organization_id = ${organizationId} AND id = ${id}`);
 }
 
+/** The worker's post-refresh rollup enqueue needs to know which farm a field belongs to (TASK-home-dashboard §2.9) — `RefreshProcessor` only carries a `fieldId`. */
+export async function getFieldFarmId(tx: Tx, organizationId: string, fieldId: string): Promise<string | null> {
+  const rows = await tx.execute<{ farm_id: string }>(sql`
+    SELECT farm_id FROM fields WHERE organization_id = ${organizationId} AND id = ${fieldId}
+  `);
+  return rows.rows[0]?.farm_id ?? null;
+}
+
 /** A cheap existence check for the field-scoped observation/stress-zone endpoints' 404 (NFR-7) — no crop-cycle join, unlike `getFieldWithCycle`. */
 export async function fieldExists(tx: Tx, organizationId: string, id: string): Promise<boolean> {
   const rows = await tx.execute<{ exists: boolean }>(sql`

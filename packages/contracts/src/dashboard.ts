@@ -177,8 +177,11 @@ export const weatherSnapshotPayloadSchema = z.object({
   precipitationMm: z.number().nonnegative(),
   windSpeedMaxKmh: z.number().nonnegative(),
   uvIndexMax: z.number().nonnegative().optional(),
-  sunrise: z.iso.datetime().optional(),
-  sunset: z.iso.datetime().optional(),
+  // Open-Meteo's local-time ISO strings (e.g. "2026-08-16T06:12") aren't
+  // full RFC3339 — no offset, no seconds — so these stay plain strings
+  // rather than z.iso.datetime(), which would reject them.
+  sunrise: z.string().optional(),
+  sunset: z.string().optional(),
 });
 export type WeatherSnapshotPayload = z.infer<typeof weatherSnapshotPayloadSchema>;
 

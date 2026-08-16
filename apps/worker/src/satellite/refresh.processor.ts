@@ -1,10 +1,12 @@
 import { Inject, Logger } from '@nestjs/common';
-import { Processor, WorkerHost } from '@nestjs/bullmq';
-import type { Job } from 'bullmq';
+import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
+import type { Job, Queue } from 'bullmq';
 import type { Database, Tx } from '@flora/db';
 import {
   bufferedFieldInterior,
+  getFarm,
   getFieldBoundaryForRefresh,
+  getFieldFarmId,
   observationExists,
   recordRefreshResult,
   upsertObservationAndZones,
@@ -22,9 +24,12 @@ import {
 import { NoSceneError, type SatelliteProvider } from '@flora/satellite';
 import type { ObservationIndex } from '@flora/contracts';
 import {
+  ROLLUP_QUEUE_NAME,
   SATELLITE_QUEUE_NAME,
+  type RollupJobData,
   type SatelliteRefreshJobData,
 } from '../queue/queues.js';
+import { farmLocalDate } from '../rollups/rollup.processor.js';
 import { DATABASE, RASTER_STORE, SATELLITE_PROVIDER } from '../tokens.js';
 
 /** Sized against Sentinel Hub's own PU baseline (512x512px, 3 bands, <=16-bit = 1 PU) — a starting point, not a measured optimum (architecture §11.1's PU `[VERIFY]`, unresolved without a live account — §10). */
@@ -65,6 +70,7 @@ export class RefreshProcessor extends WorkerHost {
     @Inject(DATABASE) private readonly db: Database,
     @Inject(SATELLITE_PROVIDER) private readonly provider: SatelliteProvider,
     @Inject(RASTER_STORE) private readonly rasterStore: RasterStore,
+    @InjectQueue(ROLLUP_QUEUE_NAME) private readonly rollupQueue: Queue<RollupJobData>,
   ) {
     super();
   }
@@ -92,6 +98,34 @@ export class RefreshProcessor extends WorkerHost {
         });
         throw err;
       }
+    });
+
+    // Reaching here means runRefresh completed without a real error — a
+    // NoSceneError skip still enqueues, since other data (crop cycles,
+    // tasks) may have changed even without a new satellite scene. Never
+    // reached on a real failure, which rethrows above and lets BullMQ retry
+    // the satellite job without an unrelated rollup enqueue (architecture
+    // §7.6, TASK-home-dashboard §2.9).
+    await this.enqueueRollup(organizationId, fieldId);
+  }
+
+  /** `jobId: rollup:${farmId}:${day}` dedupes a 200-field farm's satellite wave into one rollup, not 200. */
+  private async enqueueRollup(organizationId: string, fieldId: string): Promise<void> {
+    await withOrganization(this.db, organizationId, async (tx) => {
+      const farmId = await getFieldFarmId(tx, organizationId, fieldId);
+      if (!farmId) {
+        return;
+      }
+      const farm = await getFarm(tx, organizationId, farmId);
+      if (!farm) {
+        return;
+      }
+      const day = farmLocalDate(farm.timezone);
+      await this.rollupQueue.add(
+        'rollup',
+        { organizationId, farmId },
+        { jobId: `rollup:${farmId}:${day}` },
+      );
     });
   }
 

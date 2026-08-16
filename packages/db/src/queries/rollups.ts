@@ -417,7 +417,10 @@ export async function getFarmRollup(
   const toRow = (r: { day: string; payload: unknown; computed_at: string }): FarmRollupRow => ({
     day: r.day,
     payload: farmRollupPayloadSchema.parse(r.payload),
-    computedAt: r.computed_at,
+    // computed_at::text is Postgres's own timestamptz format ("2026-08-16
+    // 13:33:36.123+00"), not RFC3339 — round-trip through Date for the ISO
+    // form dashboardSchema's meta.computedAt (z.iso.datetime()) requires.
+    computedAt: new Date(r.computed_at).toISOString(),
   });
 
   const latest = rows.rows.find((r) => r.kind === "latest");

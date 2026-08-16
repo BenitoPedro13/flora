@@ -1,0 +1,7 @@
+{
+  "extends": "@flora/config/tsconfig/library.json",
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": ["src"]
+}

@@ -23,6 +23,7 @@
     "@flora/db": "workspace:*",
     "@flora/raster": "workspace:*",
     "@flora/satellite": "workspace:*",
+    "@flora/weather": "workspace:*",
     "@nestjs/bullmq": "11.0.5",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
