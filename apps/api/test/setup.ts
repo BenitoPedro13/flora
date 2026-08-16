@@ -6,6 +6,7 @@ import { createDbClient, memberships, organizations, users } from '@flora/db';
 import type { Database } from '@flora/db';
 import type { Role } from '@flora/contracts';
 import { hash } from '@node-rs/argon2';
+import { sql } from 'drizzle-orm';
 import { AppModule } from '../src/app.module.js';
 import { configureApp } from '../src/bootstrap.js';
 
@@ -104,4 +105,31 @@ export async function seedUserWithOrg(
     password,
     role,
   };
+}
+
+export interface SeededFarmAndCrop {
+  farmId: string;
+  cropId: string;
+}
+
+/**
+ * Seeds through the owner connection, same as `seedUserWithOrg` — the
+ * TASK-fields e2e suites need a farm (fields' required parent) and a crop
+ * (a growing cycle's required parent) beyond what `seedUserWithOrg` sets up.
+ */
+export async function seedFarmAndCrop(
+  organizationId: string,
+): Promise<SeededFarmAndCrop> {
+  const db = await getOwnerDb();
+  const farmRows = await db.execute<{ id: string }>(sql`
+    INSERT INTO farms (organization_id, name, location, timezone)
+    VALUES (${organizationId}, 'Test Farm', ST_GeomFromGeoJSON('{"type":"Point","coordinates":[-93.6,42.03]}'), 'America/Chicago')
+    RETURNING id
+  `);
+  const cropRows = await db.execute<{ id: string }>(sql`
+    INSERT INTO crops (organization_id, name, slug)
+    VALUES (${organizationId}, 'Corn', 'corn')
+    RETURNING id
+  `);
+  return { farmId: farmRows.rows[0].id, cropId: cropRows.rows[0].id };
 }

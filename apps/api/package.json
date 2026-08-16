@@ -33,6 +33,7 @@
     "@node-rs/argon2": "2.1.0",
     "cookie-parser": "1.4.7",
     "drizzle-orm": "0.45.2",
+    "express": "^5.2.1",
     "ioredis": "6.0.0",
     "nestjs-zod": "5.5.0",
     "pg": "8.23.0",

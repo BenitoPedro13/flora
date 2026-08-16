@@ -23,10 +23,27 @@ export const polygonSchema = z.object({
   coordinates: z.array(linearRingSchema).min(1),
 });
 
-export const multiPolygonSchema = z.object({
-  type: z.literal("MultiPolygon"),
-  coordinates: z.array(z.array(linearRingSchema).min(1)).min(1),
-});
+// A 40 MB self-intersecting blob should fail in zod, not in PostGIS after a
+// transaction is open (TASK-fields §2.2). No current caller comes close.
+const MAX_MULTIPOLYGON_POSITIONS = 10_000;
+
+export const multiPolygonSchema = z
+  .object({
+    type: z.literal("MultiPolygon"),
+    coordinates: z.array(z.array(linearRingSchema).min(1)).min(1),
+  })
+  .superRefine((geom, ctx) => {
+    const total = geom.coordinates.reduce(
+      (sum, polygon) => sum + polygon.reduce((s, ring) => s + ring.length, 0),
+      0,
+    );
+    if (total > MAX_MULTIPOLYGON_POSITIONS) {
+      ctx.addIssue({
+        code: "custom",
+        message: `MultiPolygon has ${total} positions, over the ${MAX_MULTIPOLYGON_POSITIONS} limit`,
+      });
+    }
+  });
 
 export type Point = z.infer<typeof pointSchema>;
 export type Polygon = z.infer<typeof polygonSchema>;

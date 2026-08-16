@@ -18,7 +18,8 @@
     "migrate": "dotenv -e ../../.env -- tsx src/migrate.ts",
     "studio": "dotenv -e ../../.env -- drizzle-kit studio",
     "seed": "dotenv -e ../../.env -- tsx src/seed.ts",
-    "seed:demo": "dotenv -e ../../.env -- tsx src/seed-demo.ts"
+    "seed:demo": "dotenv -e ../../.env -- tsx src/seed-demo.ts",
+    "seed:bulk": "dotenv -e ../../.env -- tsx src/seed-bulk.ts"
   },
   "dependencies": {
     "@flora/contracts": "workspace:*",

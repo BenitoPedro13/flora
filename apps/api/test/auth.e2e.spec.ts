@@ -3,7 +3,7 @@ import type { Session } from '@flora/contracts';
 import type { INestApplication } from '@nestjs/common';
 import { eq } from 'drizzle-orm';
 import request from 'supertest';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
 import { asCookieHeader, cookieValue, relayCookies } from './cookie-utils.js';
 import { getServer } from './http.js';
 import { getTestApp, seedUserWithOrg } from './setup.js';
@@ -12,11 +12,12 @@ describe('auth (e2e)', () => {
   let app: INestApplication;
 
   beforeAll(async () => {
+    // getTestApp() is a shared, process-lifetime singleton (test/setup.ts) —
+    // every e2e spec file reuses the same compiled app, so it must not be
+    // closed here. Closing it in one file's afterAll starved every file that
+    // runs after it (fileParallelism: false runs every file in one worker).
+    // Testcontainers' own reaper cleans up the containers at process exit.
     app = await getTestApp();
-  });
-
-  afterAll(async () => {
-    await app.close();
   });
 
   it('logs in, reads /me, refreshes, and logs out — the full cookie flow', async () => {

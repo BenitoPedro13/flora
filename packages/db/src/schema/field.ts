@@ -61,6 +61,11 @@ export const fields = pgTable(
     // Composite-FK parent for crop_cycles, observations, stress_zones, tasks (§2.4).
     unique("fields_organization_id_id_unique").on(table.organizationId, table.id),
     index("fields_boundary_gist").using("gist", table.boundary),
+    // Keyset pagination over `position` and `name` (TASK-fields §2.3) — the
+    // trailing `id` makes the `(sortValue, id) > (cursor)` row-value
+    // comparison usable even when many rows share a sort value.
+    index("fields_org_position_id_idx").on(table.organizationId, table.position, table.id),
+    index("fields_org_name_id_idx").on(table.organizationId, table.name, table.id),
   ],
 );
 

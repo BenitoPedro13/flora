@@ -1,4 +1,4 @@
-import type { MultiPolygon } from "@flora/contracts";
+import type { MultiPolygon, TaskActivity } from "@flora/contracts";
 import { eq, sql } from "drizzle-orm";
 import { createDbClient } from "./client.js";
 import { insertField } from "./queries/fields.js";
@@ -9,33 +9,88 @@ import { tasks } from "./schema/task.js";
 import { withOrganization } from "./tenancy.js";
 
 /**
- * Demo data — three fields, a growing crop cycle on each, a handful of
- * tasks (TASK-domain-schema §2.8). Kept separate from `seed.ts` so demo
- * data never lands in a database that merely ran `db:seed`, and so its
- * polygons can be regenerated without touching identity seeding.
- *
- * Boundaries are hand-authored, not random: `TASK-fields`'s map has to
- * render something with a plausible shape and a centroid matching the
- * design's footer (4.5831° S / 59.1328° W, design-spec §5.2), and
- * `ST_Area` has to return a farm-sized number. Must run after `db:seed`.
+ * Demo data — matched to `1:35172`'s four field cards (TASK-fields §2.12) so
+ * the visual diff against the Figma export is a real comparison, not a diff
+ * of unrelated copy. Field names, crop species, quantities and activity tags
+ * were read off the Figma via the MCP (`get_design_context` on each card:
+ * `2158:18884`/`19459`/`19362`/`19539`, file `hY3Nd3BBbJsjpihPnfZgpd`).
+ * Growth is derived (never stored, architecture §17 Q10), so `plantedOn` is
+ * computed relative to the run date — each field lands on its designed
+ * growth percentage on the day the seed runs, against a 100-day cycle so
+ * "N days before today" produces exactly N% growth. Idempotent, must run
+ * after `db:seed`.
  */
 
 // Matches seed.ts's SEED_ORG_SLUG / SEED_FARM_NAME — the org and farm this
 // script attaches demo fields to.
 const SEED_ORG_SLUG = "flora-farm";
 const SEED_FARM_NAME = "Flora Farm — Amazonas";
+const SEED_FARM_TIMEZONE = "America/Manaus";
+
+// A 100-day crop cycle: "N days before today" is exactly N% growth under
+// fields.ts's ROUND((today - plantedOn) * 100 / (harvestOn - plantedOn)).
+const CYCLE_DAYS = 100;
 
 interface DemoField {
   name: string;
   center: [number, number];
   cropName: string;
+  quantityKg: number;
+  growthPct: number;
+  /** Distinct non-done task activities — rendered as the card's activity tags, in enum declaration order. */
+  activities: TaskActivity[];
 }
 
 const DEMO_FIELDS: DemoField[] = [
-  { name: "Field 237", center: [-59.1328, -4.5831], cropName: "Corn" },
-  { name: "Field 238", center: [-59.126, -4.5831], cropName: "Wheat" },
-  { name: "Field 239", center: [-59.1328, -4.5885], cropName: "Soy" },
+  {
+    name: "Field 237",
+    center: [-59.1328, -4.5831],
+    cropName: "Corn",
+    quantityKg: 1900,
+    growthPct: 30,
+    activities: ["watering", "fertilization"],
+  },
+  {
+    name: "Field 238",
+    center: [-59.126, -4.5831],
+    cropName: "Corn",
+    quantityKg: 1900,
+    growthPct: 80,
+    activities: ["watering", "fertilization"],
+  },
+  {
+    name: "Field 239",
+    center: [-59.1328, -4.5885],
+    cropName: "Corn",
+    quantityKg: 1900,
+    growthPct: 10,
+    activities: ["planting", "fertilization"],
+  },
+  {
+    name: "Field 240",
+    center: [-59.126, -4.5885],
+    cropName: "Corn",
+    quantityKg: 1900,
+    growthPct: 40,
+    activities: ["fertilization", "pest_control"],
+  },
 ];
+
+/** The farm-local calendar date (`America/Manaus`), not the server's UTC date — architecture §5.3. */
+function farmLocalToday(timezone: string): Date {
+  const iso = new Intl.DateTimeFormat("en-CA", { timeZone: timezone }).format(new Date());
+  return new Date(`${iso}T00:00:00Z`);
+}
+
+function addDays(date: Date, days: number): Date {
+  const result = new Date(date);
+  result.setUTCDate(result.getUTCDate() + days);
+  return result;
+}
+
+function isoDate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
 
 // ~333m × ~222m per field (a few hectares), spaced far enough apart at this
 // latitude (~500m+ between centers) that the rectangles never overlap.
@@ -83,9 +138,9 @@ async function main() {
       throw new Error(`seed farm '${SEED_FARM_NAME}' not found — run 'pnpm db:seed' first`);
     }
 
-    await withOrganization(db, org.id, async (tx) => {
-      const statuses = ["todo", "in_progress", "done"] as const;
+    const today = farmLocalToday(SEED_FARM_TIMEZONE);
 
+    await withOrganization(db, org.id, async (tx) => {
       for (const [i, demoField] of DEMO_FIELDS.entries()) {
         const fieldId = await insertField(tx, {
           organizationId: org.id,
@@ -100,24 +155,31 @@ async function main() {
           throw new Error(`seed crop '${demoField.cropName}' not found — run 'pnpm db:seed' first`);
         }
 
+        const plantedOn = addDays(today, -demoField.growthPct);
+        const expectedHarvestOn = addDays(plantedOn, CYCLE_DAYS);
+
         await tx.insert(cropCycles).values({
           organizationId: org.id,
           fieldId,
           cropId: crop.id,
-          plantedOn: "2026-06-01",
-          expectedHarvestOn: "2026-10-01",
+          plantedOn: isoDate(plantedOn),
+          expectedHarvestOn: isoDate(expectedHarvestOn),
           status: "growing",
-          quantityKg: null,
+          quantityKg: String(demoField.quantityKg),
         });
 
-        await tx.insert(tasks).values({
-          organizationId: org.id,
-          fieldId,
-          title: `${statuses[i]!.replace("_", " ")} task on ${demoField.name}`,
-          status: statuses[i]!,
-          activity: "watering",
-          position: String(i + 1),
-        });
+        // Non-done tasks whose distinct activities render as the card's
+        // activity tags (TASK-domain-schema §7, resolved by TASK-fields §1.1).
+        for (const [j, activity] of demoField.activities.entries()) {
+          await tx.insert(tasks).values({
+            organizationId: org.id,
+            fieldId,
+            title: `${activity.replace("_", " ")} — ${demoField.name}`,
+            status: j === 0 ? "todo" : "in_progress",
+            activity,
+            position: String(j + 1),
+          });
+        }
       }
     });
 

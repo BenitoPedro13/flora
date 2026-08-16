@@ -9,12 +9,16 @@ import {
 import type { Request, Response } from 'express';
 import { ZodValidationException } from 'nestjs-zod';
 import type { ProblemDetails } from '@flora/contracts';
+import { InvalidGeometryError, OneGrowingCycleError } from '@flora/db';
 
 const TITLES: Partial<Record<number, string>> = {
   400: 'Bad Request',
   401: 'Unauthorized',
   403: 'Forbidden',
   404: 'Not Found',
+  409: 'Conflict',
+  413: 'Payload Too Large',
+  422: 'Unprocessable Entity',
   429: 'Too Many Requests',
   500: 'Internal Server Error',
   503: 'Service Unavailable',
@@ -61,6 +65,22 @@ function describe(exception: unknown): {
   detail?: string;
   errors?: Array<{ path: string; message: string }>;
 } {
+  // TASK-fields §2.4: an invalid boundary is a drawing mistake for the
+  // farmer to see (422 with `ST_IsValidReason`'s text), and a second growing
+  // cycle is a field-level conflict (409) — neither is a server error.
+  if (exception instanceof InvalidGeometryError) {
+    return {
+      status: HttpStatus.UNPROCESSABLE_ENTITY,
+      detail: exception.reason,
+    };
+  }
+  if (exception instanceof OneGrowingCycleError) {
+    return { status: HttpStatus.CONFLICT, detail: exception.message };
+  }
+  if (exception instanceof Error && exception.name === 'PayloadTooLargeError') {
+    return { status: HttpStatus.PAYLOAD_TOO_LARGE, detail: exception.message };
+  }
+
   if (exception instanceof ZodValidationException) {
     const zodError = exception.getZodError() as {
       issues: Array<{ path: PropertyKey[]; message: string }>;
