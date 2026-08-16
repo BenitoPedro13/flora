@@ -85,6 +85,23 @@ export function FieldListPanel({ initialFieldsPage, initialGeojson, farms, crops
 
   const fields = fieldsQuery.data?.pages.flatMap((p) => p.items) ?? [];
 
+  // A new field's default map camera should open over the farmer's own
+  // land, not a farm row's `location` point — that point is set once at
+  // farm creation and never moves just because fields get drawn elsewhere
+  // under it (the bug: a farm seeded as "Flora Farm — Amazonas" keeps that
+  // location forever, even once real fields exist on the other side of the
+  // planet). The average centroid of the org's actual fields is a live
+  // signal instead of a stale one.
+  const geojson = geojsonQuery.data ?? initialGeojson;
+  const existingFieldsCenter = React.useMemo<[number, number] | null>(() => {
+    if (geojson.features.length === 0) return null;
+    const [sumLon, sumLat] = geojson.features.reduce(
+      ([lon, lat], f) => [lon + f.properties.centroid.coordinates[0], lat + f.properties.centroid.coordinates[1]],
+      [0, 0],
+    );
+    return [sumLon / geojson.features.length, sumLat / geojson.features.length];
+  }, [geojson]);
+
   function setSelectedFieldId(id: string | null) {
     const params = new URLSearchParams(searchParams.toString());
     if (id) params.set("field", id);
@@ -178,7 +195,7 @@ export function FieldListPanel({ initialFieldsPage, initialGeojson, farms, crops
         </div>
         <div className="relative flex-1">
           <FieldMap
-            features={geojsonQuery.data ?? initialGeojson}
+            features={geojson}
             selectedFieldId={selectedFieldId}
             onSelectField={setSelectedFieldId}
             onFieldDoubleClick={(id) => void openEditorFor(id)}
@@ -193,6 +210,7 @@ export function FieldListPanel({ initialFieldsPage, initialGeojson, farms, crops
         farms={farms}
         crops={crops}
         field={editingField}
+        existingFieldsCenter={existingFieldsCenter}
       />
       <ImportCard open={importOpen} onOpenChange={setImportOpen} farms={farms} />
     </>

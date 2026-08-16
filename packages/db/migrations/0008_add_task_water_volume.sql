@@ -1,0 +1,1 @@
+ALTER TABLE "tasks" ADD COLUMN "water_volume_m3" numeric;

@@ -479,23 +479,36 @@ Map: the same satellite base, with the selected field showing a viridis-ramped z
 
 ### 5.5 Tasks — `24:11420`
 
+**Corrected 2026-08-16 (`TASK-tasks-board` §1.3):** the measurements below are *measured* off
+the file (`get_metadata`/`get_screenshot` on `24:11420`, file `hY3Nd3BBbJsjpihPnfZgpd`), not
+read off this section's old prose, which this replaces. Drag-and-drop is **NFR-9**, not NFR-7
+(NFR-7 is the cross-tenant suite) — the old text below misattributed it.
+
 Header: 40 px green check tile · "My Tasks" over "Check all the tasks you need to create" ·
-right: **Import** and primary **+ Create Task**.
-Toolbar: a `Board | List | Timeline` segmented control at the left; search + Filter + Sort at
-the right.
+right: **Import** and primary **+ Create Task**. Toolbar (`Horizontal Filter [1.0]`, x=299,
+y=92, 1114×36): a **320 px** `Board | List | Timeline` segmented control at the left; at the
+right, a 300 px search `Text Input` with a `⌘1` `Kbd`, an 82 px `Filter` button, and a 123 px
+`Sort by` `Dropdown`.
 
-**Board**: three columns (To Do 2, In Progress 3, Done 3) on a `bg-weak-50` fill with radius
-16. Column header: a status dot (grey / yellow / green) + name + count, and `+` and `⋯` at the
-right. Footer: a **+ Add task** ghost row.
+**Board** (`Frame 60`, x=299, y=152, 1114×688): three columns, each **355.33 px** wide with a
+**24 px** gap, `bg-weak-50` fill, radius 16, 17 px inner padding — hugging their content, not an
+equal-height grid (`To Do` is 493 px tall with 2 cards; `In Progress`/`Done` are 688 px with 3).
+Column header: a 12 px status dot + name + count `Badge`, and two 20×20 `Compact Button`s at
+the right. Footer: a 99×36 **+ Add task** ghost button.
 
-**Task card**: "Field: Wheat 09" in `Paragraph/X Small` · divider · title in `Label/Medium` ·
-a progress ring + `25%` · an avatar group (3) + an activity tag · a footer row with a comment
-count `2`, a subtask count `1/5`, and a right-aligned date range `Sep 24 - Oct 4`.
+**Task card** (321.33×184, the `Widgets [HR Management] [1.0]` PRO block — §6.2 — with its
+trailing `Buttons [1.0]` control, `Stacked Progress Bar` and `Chart Legends` layers hidden in
+every instance; do not build them): "Field: Wheat 09" in `Paragraph/X Small` · a `Content
+Divider` · title in `Label/Medium` · a 16 px progress ring + `25%` · a `user-3-line` icon +
+`Avatar Group` + an activity-tag `Badge` · a footer row with a `message-3-line` comment count
+`2`, a `time-line` subtask fraction `1/5` (the same clock icon as the date range, not a
+checkbox/list icon — a design defect, shipped as drawn), and a right-aligned `time-line` date
+range `Sep 24 - Oct 4`.
 
-Drag-and-drop between columns is implied by the board and is a hard requirement
-(architecture NFR-7). List and Timeline tabs are **undesigned** —
-`[VERIFY: request List and Timeline designs, or scope Phase 3 to Board only and hide the
-other two tabs rather than shipping an empty state behind them.]`
+Drag-and-drop between columns is implied by the board and is a hard requirement (**NFR-9**).
+List and Timeline tabs are **undesigned** — resolved by `TASK-tasks-board` §7 decision 1:
+shipped **disabled with a tooltip** rather than hidden or an empty state, the same treatment
+`TASK-crop-stress` §7 gave its own undesigned controls.
 
 ### 5.6 Weather — `3:5274`
 
@@ -553,7 +566,7 @@ block's.
 |---|---|---|
 | `Sidebar [Navigation] [1.0]` | `AppSidebar` | Avatar · Divider · Button · Tooltip (collapsed rail) |
 | `Page Header [1.0]` | `PageHeader` | Avatar · Button · Badge · Dropdown |
-| `Widgets [HR Management] [1.0]` | `WidgetCard` | the §4.5 card anatomy — Divider · Button · Progress Circle |
+| `Widgets [HR Management] [1.0]` | `TaskCard` | Divider · `Avatar Group` · `Progress Circle` — the §4.5 card anatomy |
 | `Schedule Cards [Schedule] [1.0]` | `WeatherDayCard` | plain layout + Label tokens |
 | `File Upload Cards [1.0]` | `ImportCard` | File Upload · Progress Bar · Compact Button |
 | `Chart Legends [1.0]` | `ChartLegend` | shadcn `ChartLegendContent` (§7) |
@@ -564,6 +577,13 @@ block's.
 `AppSidebar` and `PageHeader` are the two with real work in them — the collapsed 80 px rail
 (§4.3) and the active-state edge indicator (§4.2) are the fiddly parts. Budget them as
 first-class components in `TASK-design-system-shell`, not as afterthoughts.
+
+**`Widgets [HR Management] [1.0]`, corrected 2026-08-16 (`TASK-tasks-board` §1.3):** its first
+real consumer, the Tasks board's card, revealed three layers hidden in every instance —
+`Buttons [1.0]` (the trailing control §4.5 calls part of every card header), `Stacked Progress
+Bar`, and `Chart Legends`. `TaskCard` does not render them. Do not read §4.5's "the trailing
+Details control is part of the card header" as applying to this block — on it, the designer
+turned that layer off.
 
 ### 6.3 Flora-specific — build regardless
 
@@ -669,7 +689,11 @@ not extractions:
 | D1 | **No mobile or tablet artboards.** Everything is 1440 fixed. Below ~1280 the Fields split and the 4-across Home row have no defined behaviour. |
 | D2 | **No dark mode.** AlignUI ships dark tokens and the CLI generates them, so the cost is mostly review, not build — but no dark artboards exist. |
 | D3 | **No empty, loading, or error states** for any screen. A satellite refresh can fail (architecture NFR-8) and a new farm has zero fields; both need designs. **Partially closed 2026-08-16 (`TASK-crop-stress` §2.13):** Crop Stress (`18:6567`) now has all five — no-imagery-yet, zero-zones, loading skeletons, fetch error with retry, and the missing-Mapbox-token placeholder (unchanged from `TASK-fields`) — built from AlignUI primitives, no artboard existed for any of them. Still open for every other screen. |
-| D4 | **Tasks List and Timeline tabs undesigned** (§5.5). |
+| D4 | **Tasks List and Timeline tabs undesigned** (§5.5). **Resolved 2026-08-16 (`TASK-tasks-board` §7 decision 1): shipped disabled, with a tooltip naming why** — the same treatment `TASK-crop-stress` §7 gave its own undesigned controls, not a hidden tab or an invented empty state. Still open for a designer to actually design the two views. |
+| D20 | **`24:11420` has no create-task form.** `+ Create Task`, a column's `+`, and `+ Add task` are three entry points into a form the file never draws. Built 2026-08-16 (`TASK-tasks-board` §2.8) from AlignUI primitives (`Input`, `Textarea`, `Select`, `Modal`, `Label`, `Hint`) and `FieldEditor`'s precedent — `components/flora/task-editor.tsx`. The water-volume field (architecture §4.4) has no place in the design at all; its position in this invented form is a guess. |
+| D21 | **No task detail view.** A card's `2` comments and `1/5` subtasks are real counts (`TASK-tasks-board` §2.9) but there is nowhere designed to read or write either — `TASK-task-detail` picks this up (`TASK-tasks-board` §9). |
+| D22 | **No import flow is designed for tasks**, unlike Fields' (D18). `TASK-tasks-board` §7 decision 2: shipped disabled, with a tooltip, rather than hidden or invented. |
+| D23 | **The subtask-count icon is `time-line`** — the same clock glyph the date range uses, not a checkbox or list icon (§5.5, measured off `24:11420`). Shipped as drawn; flagging in case it's a copy-paste error in the file rather than intentional. |
 | D5 | **Weather "See All" has no destination** (§5.6). |
 | D6 | **No focus-visible treatment** anywhere. Needed for keyboard accessibility. |
 | D7 | **Contrast**: `text-soft-400 #99a0ae` on white is **2.6:1** — below WCAG AA's 4.5:1 for body text. It is used for axis labels, units and coordinates. Either accept it for non-essential decoration only, or darken to `text-sub-600` where it carries meaning. |
@@ -692,7 +716,9 @@ not extractions:
 
 A screen is done when:
 
-1. It renders at 1440×900 within **2% pixel delta** of its Figma export (architecture NFR-9).
+1. It renders at 1440×900 within **2% pixel delta** of its Figma export (architecture **NFR-10** —
+   corrected 2026-08-16, `TASK-tasks-board` §2.12: this line cited NFR-9, which is the drag
+   optimistic-UI budget, not the screenshot diff).
 2. Every colour comes from an AlignUI token class — a review greps the diff for raw hex and
    finds none outside `globals.css`, the chart config module, and `components/map/config.ts`
    (added by `TASK-fields` §3.4: Mapbox paint properties can't take a CSS class or resolve

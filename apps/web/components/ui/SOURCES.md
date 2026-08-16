@@ -95,6 +95,31 @@ layout. `sonner` added as a dependency.
 | `components/ui/toast.tsx` | [`alignui.com/docs/v1.2/ui/toast`](https://alignui.com/docs/v1.2/ui/toast) | `dae5767eeb24ab2a9a6ded3055ac33410148cbe989c2740d2713d52a3b49b4d9` (before the two bug fixes below) — **bug fix 1**: added an explicit `const toast: typeof sonnerToast & { custom: typeof customToast }` annotation. This repo's `packages/config/tsconfig/base.json` sets `declaration: true` project-wide (invariant: one TypeScript config source, §4), and without the annotation `tsc` fails with TS4023 — the inferred type of the spread object names `sonner`'s internal, unexported `PromiseIExtendedResult`, which can't be written to a `.d.ts`. **bug fix 2**: `defaultOptions` and `customToast`'s `options` param were typed `ToasterProps` (the `<Toaster>` *component's* global props) in the docs source; `sonnerToast.custom`'s real second parameter is `ExternalToast` (per-toast options) — a different, non-overlapping-enough type in the installed `sonner@2.0.8`. Retyped both to `ExternalToast`, which carries the same `className`/`position` fields the docs source actually sets. Neither fix changes behaviour, only the types. |
 | `components/ui/toast-alert.tsx` | [`alignui.com/docs/v1.2/ui/toast`](https://alignui.com/docs/v1.2/ui/toast) | `30c2811782c81afdce2cf2d9709e9cf5652187c537ecbb86dc89857be327344a` |
 
+## `avatar-group`, `progress-circle`, `segmented-control`, `textarea`, `checkbox` (TASK-tasks-board)
+
+Fetched 2026-08-16 the same way as every row above — single-escaped flight payload, like `select`.
+`segmented-control`'s docs page embeds a second component in the same flight chunk,
+`useTabObserver`, a hook dependency with no trailing `export { ... };` of its own (it's exported
+inline as `export function useTabObserver(...)`); the general "cut at the next `export {};`"
+extraction rule would have run past its own end and captured the *next* component's block by
+mistake, caught by inspecting the raw output before trusting it. Placed at
+`apps/web/hooks/use-tab-observer.tsx` (a new top-level `hooks/` directory) because the vendored
+`segmented-control.tsx` imports it via `@/hooks/use-tab-observer`, unmodified per invariant 8 —
+rewriting the import to fit the existing tree would no longer be byte-identical to the source.
+
+| File | Source | sha256 |
+|---|---|---|
+| `components/ui/avatar-group.tsx` | [`alignui.com/docs/v1.2/ui/avatar-group`](https://alignui.com/docs/v1.2/ui/avatar-group) | `39f76a75d950a506162cee3e8e091b1cd2fd4b87f909d101e809b2a772f77db4` |
+| `components/ui/progress-circle.tsx` | [`alignui.com/docs/v1.2/ui/progress-circle`](https://alignui.com/docs/v1.2/ui/progress-circle) | `7fa685715088a49509ac3db33bd7c2a2bab073a3b930d83d7a94694268d72ca6` |
+| `components/ui/segmented-control.tsx` | [`alignui.com/docs/v1.2/ui/segmented-control`](https://alignui.com/docs/v1.2/ui/segmented-control) | `bde158f49fc02372beec3699695c856ef6a489b37bbe2408b1c26c013d4b1d19` |
+| `hooks/use-tab-observer.tsx` | Dependency of `segmented-control.tsx`, same page | `7e0857b45d2b626c8820d38dd20c7c290ef119f8c642565fc7f402972c2a1bbd` |
+| `components/ui/textarea.tsx` | [`alignui.com/docs/v1.2/ui/textarea`](https://alignui.com/docs/v1.2/ui/textarea) | `8ee6ef9088ac7bba497fc2a67886963988485a34a251e535d18ce335addd3a14` |
+| `components/ui/checkbox.tsx` | [`alignui.com/docs/v1.2/ui/checkbox`](https://alignui.com/docs/v1.2/ui/checkbox) | `f65b0780ec9c07e55dec7b6df4e3b63b041c8a38b2a5c999517fd79af8f44df3` |
+
+`segmented-control.tsx` and `checkbox.tsx` pull in two new dependencies neither previously in
+`apps/web/package.json`: `@radix-ui/react-tabs`, `@radix-ui/react-checkbox`, and `merge-refs`
+(the third is `segmented-control`'s own ref-merging helper, not a Radix package).
+
 ## Cross-check note
 
 `github.com/alignui/alignui-nextjs-typescript-starter` (pushed 2025-02-16, Tailwind v3-era) was

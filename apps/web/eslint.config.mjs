@@ -18,6 +18,11 @@ const eslintConfig = defineConfig([
     // silencing it inline would break byte-identity.
     "components/ui/**",
     "utils/**",
+    // `useTabObserver`, `segmented-control.tsx`'s vendored dependency
+    // (TASK-tasks-board §2.5/SOURCES.md) — same reasoning, same file, just
+    // a top-level `hooks/` directory because that's the import path its
+    // own docs page uses.
+    "hooks/**",
   ]),
 ]);
 

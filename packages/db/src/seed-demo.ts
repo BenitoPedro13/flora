@@ -1,12 +1,28 @@
 import type { MultiPolygon, TaskActivity } from "@flora/contracts";
+import { hash } from "@node-rs/argon2";
 import { eq, sql } from "drizzle-orm";
 import { createDbClient } from "./client.js";
 import { insertField } from "./queries/fields.js";
-import { organizations } from "./schema/auth.js";
+import { memberships, organizations, users } from "./schema/auth.js";
 import { crops } from "./schema/crop.js";
 import { cropCycles, fields } from "./schema/field.js";
-import { tasks } from "./schema/task.js";
+import { subtasks, taskAssignees, taskComments, tasks } from "./schema/task.js";
+import type { Tx } from "./tenancy.js";
 import { withOrganization } from "./tenancy.js";
+
+/** Same cost parameters as `seed.ts` / `apps/api/src/auth/password.service.ts`. */
+const ARGON2_OPTIONS = { memoryCost: 19456, timeCost: 2, parallelism: 1 };
+
+/**
+ * `TASK-tasks-board` §1.4 row 5 / §2.10: the demo org has one user, but
+ * `24:11420`'s cards show a 2–3-person avatar group. Two placeholder
+ * teammates, seeded (not real accounts anyone logs into) so assignees are
+ * real rows, not mock data.
+ */
+const SEED_TEAMMATES = [
+  { email: "maria@flora.local", name: "Maria Santos" },
+  { email: "joao@flora.local", name: "João Silva" },
+];
 
 /**
  * Demo data — matched to `1:35172`'s four field cards (TASK-fields §2.12) so
@@ -138,9 +154,53 @@ async function main() {
       throw new Error(`seed farm '${SEED_FARM_NAME}' not found — run 'pnpm db:seed' first`);
     }
 
+    const [ownerMembership] = await db.select().from(memberships).where(eq(memberships.organizationId, org.id)).limit(1);
+    if (!ownerMembership) {
+      throw new Error(`no membership found for org '${SEED_ORG_SLUG}' — run 'pnpm db:seed' first`);
+    }
+
+    const teammateIds: string[] = [];
+    for (const teammate of SEED_TEAMMATES) {
+      const passwordHash = await hash(`${teammate.email}-unused-seed-password`, ARGON2_OPTIONS);
+      const [user] = await db.insert(users).values({ email: teammate.email, passwordHash, name: teammate.name }).returning();
+      await db.insert(memberships).values({ organizationId: org.id, userId: user!.id, role: "operator" });
+      teammateIds.push(user!.id);
+    }
+    const assigneePool = [ownerMembership.userId, ...teammateIds];
+
     const today = farmLocalToday(SEED_FARM_TIMEZONE);
 
+    /**
+     * Comments, subtasks and assignees on a real task row — so the card's
+     * `2` comment count, `1/5` subtask fraction and avatar group are genuine
+     * (§2.10), not the mock's fixed numbers. Varies by `seedIndex` only to
+     * avoid every card looking identical.
+     */
+    async function enrichTask(tx: Tx, taskId: string, seedIndex: number) {
+      await tx.insert(taskComments).values([
+        { organizationId: org.id, taskId, authorId: ownerMembership.userId, body: "Checked the field this morning, looks on track." },
+        { organizationId: org.id, taskId, authorId: assigneePool[seedIndex % assigneePool.length]!, body: "Will follow up tomorrow." },
+      ]);
+
+      const subtaskCount = 3 + (seedIndex % 3);
+      const doneCount = seedIndex % (subtaskCount + 1);
+      await tx.insert(subtasks).values(
+        Array.from({ length: subtaskCount }, (_, k) => ({
+          organizationId: org.id,
+          taskId,
+          title: `Step ${k + 1}`,
+          doneAt: k < doneCount ? new Date() : null,
+          position: String(k + 1),
+        })),
+      );
+
+      const assigneeCount = 1 + (seedIndex % 2);
+      const assignees = Array.from(new Set([assigneePool[seedIndex % assigneePool.length]!, ...assigneePool])).slice(0, assigneeCount);
+      await tx.insert(taskAssignees).values(assignees.map((userId) => ({ organizationId: org.id, taskId, userId })));
+    }
+
     await withOrganization(db, org.id, async (tx) => {
+      let seedIndex = 0;
       for (const [i, demoField] of DEMO_FIELDS.entries()) {
         const fieldId = await insertField(tx, {
           organizationId: org.id,
@@ -170,16 +230,48 @@ async function main() {
 
         // Non-done tasks whose distinct activities render as the card's
         // activity tags (TASK-domain-schema §7, resolved by TASK-fields §1.1).
+        // These eight rows are exactly what `fields.spec.ts` and
+        // `apps/web/e2e/fields.spec.ts` assert their activity tags against
+        // (§2.10's constraint) — extended with real progress/dates and
+        // `enrichTask`, never repurposed to a different status or activity.
         for (const [j, activity] of demoField.activities.entries()) {
-          await tx.insert(tasks).values({
+          const [row] = await tx
+            .insert(tasks)
+            .values({
+              organizationId: org.id,
+              fieldId,
+              title: `${activity.replace("_", " ")} — ${demoField.name}`,
+              status: j === 0 ? "todo" : "in_progress",
+              activity,
+              progressPct: j === 0 ? 15 : 55,
+              startsOn: isoDate(addDays(today, -3)),
+              dueOn: isoDate(addDays(today, 11)),
+              position: String(j + 1),
+            })
+            .returning({ id: tasks.id });
+          await enrichTask(tx, row!.id, seedIndex++);
+        }
+
+        // A third, `done` task per field — the board needs a populated
+        // third column, and the seed previously produced none (§1.1, §2.10).
+        // A new row, not a repurposing of the two above.
+        const doneActivity = demoField.activities[0]!;
+        const [doneRow] = await tx
+          .insert(tasks)
+          .values({
             organizationId: org.id,
             fieldId,
-            title: `${activity.replace("_", " ")} — ${demoField.name}`,
-            status: j === 0 ? "todo" : "in_progress",
-            activity,
-            position: String(j + 1),
-          });
-        }
+            title: `${doneActivity.replace("_", " ")} — ${demoField.name} (completed)`,
+            status: "done",
+            activity: doneActivity,
+            progressPct: 100,
+            startsOn: isoDate(addDays(today, -14)),
+            dueOn: isoDate(addDays(today, -1)),
+            waterVolumeM3: doneActivity === "watering" ? "4.5" : null,
+            position: "1",
+          })
+          .returning({ id: tasks.id });
+        await enrichTask(tx, doneRow!.id, seedIndex++);
       }
     });
 

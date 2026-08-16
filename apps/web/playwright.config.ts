@@ -2,9 +2,10 @@ import { defineConfig, devices } from "@playwright/test";
 
 /**
  * `shell.spec.ts` (TASK-design-system-shell §2.10), `fields.spec.ts`
- * (TASK-fields §6), and `stress.spec.ts` (TASK-crop-stress §2.14) — the
- * `chromium` project's `testMatch` grows with each screen task. 1440×900
- * and maxDiffPixelRatio 0.02 are NFR-10's numbers.
+ * (TASK-fields §6), `stress.spec.ts` (TASK-crop-stress §2.14), and
+ * `tasks.spec.ts` (TASK-tasks-board §2.11) — the `chromium` project's
+ * `testMatch` grows with each screen task. 1440×900 and maxDiffPixelRatio
+ * 0.02 are NFR-10's numbers.
  */
 export default defineConfig({
   testDir: "./e2e",

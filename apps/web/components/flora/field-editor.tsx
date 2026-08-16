@@ -42,13 +42,18 @@ export interface FieldEditorProps {
   field?: EditingField;
   /** Pre-filled from a "+ Add Field" click after drawing on the list map, or from a double-clicked polygon. */
   initialBoundary?: MultiPolygon | null;
+  /** The average centroid of the org's existing fields — a live signal for a new field's default map camera, preferred over the selected farm's own (often stale) `location` point. `null` when the org has no fields yet. */
+  existingFieldsCenter?: [number, number] | null;
 }
 
 function BoundaryMap({
   initialBoundary,
+  defaultCenter,
   onChange,
 }: {
   initialBoundary: MultiPolygon | null;
+  /** The selected farm's own location — a new field with nothing drawn yet should open over the farmer's own land, not a hardcoded demo coordinate. */
+  defaultCenter: [number, number];
   onChange: (boundary: MultiPolygon | null, areaM2: number | null) => void;
 }) {
   const token = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
@@ -72,9 +77,10 @@ function BoundaryMap({
         fitBoundsOptions: { padding: 32 },
       };
     }
-    // The design's Amazonas farm (architecture §5.3) — a reasonable default camera for a new field.
-    return { longitude: -59.1328, latitude: -4.5831, zoom: 15 };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps -- fit once, from whatever boundary the editor opened with.
+    const [longitude, latitude] = defaultCenter;
+    return { longitude, latitude, zoom: 15 };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- fit once, from whatever boundary/centre the editor opened with; a farm switch mid-draw shouldn't yank the camera out from under a boundary in progress.
+  }, []);
 
   if (!token) {
     return <MapPlaceholder />;
@@ -101,7 +107,7 @@ function BoundaryMap({
  * card anatomy. Three ways in: `+ Add Field`, `View Details`, and
  * double-clicking a polygon — all render this same component.
  */
-export function FieldEditor({ open, onOpenChange, farms, crops, field, initialBoundary }: FieldEditorProps) {
+export function FieldEditor({ open, onOpenChange, farms, crops, field, initialBoundary, existingFieldsCenter }: FieldEditorProps) {
   const isEdit = field !== undefined;
   const queryClient = useQueryClient();
 
@@ -120,6 +126,12 @@ export function FieldEditor({ open, onOpenChange, farms, crops, field, initialBo
   const [localCrops, setLocalCrops] = React.useState(crops);
 
   const singleFarm = farms.length === 1;
+  const selectedFarm = farms.find((f) => f.id === farmId) ?? farms[0];
+  // Prefer the org's actual field centroid over the farm row's own
+  // `location` — that point is set once at farm creation and can go stale
+  // (a farm seeded far from where its fields actually get drawn later).
+  // Amazonas is only a last-resort fallback for a farm-less, field-less org.
+  const defaultCenter: [number, number] = existingFieldsCenter ?? selectedFarm?.location.coordinates ?? [-59.1328, -4.5831];
 
   const addCropMutation = useMutation({
     mutationFn: (cropName: string) => apiFetchClient("/api/v1/crops", cropSchema, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ name: cropName }) }),
@@ -245,7 +257,7 @@ export function FieldEditor({ open, onOpenChange, farms, crops, field, initialBo
 
           <div className="flex flex-col gap-1.5">
             <Label.Root>Boundary</Label.Root>
-            <BoundaryMap initialBoundary={boundary} onChange={(b, a) => { setBoundary(b); setAreaM2(a); }} />
+            <BoundaryMap initialBoundary={boundary} defaultCenter={defaultCenter} onChange={(b, a) => { setBoundary(b); setAreaM2(a); }} />
             <p className="text-paragraph-xs text-text-sub-600">
               {areaM2 != null ? `${(areaM2 / 4046.8564224).toFixed(2)} ac drawn` : "Draw the field boundary on the map"}
             </p>

@@ -6,7 +6,14 @@
 > **Blocks:** `TASK-home-dashboard` (Phase 4) — Home's re-sourced **Water Used** tile reads
 > volume off completed `watering` tasks (architecture §4.4), which needs §2.3's column.
 > **Design:** `24:11420` ("Tasks"), 1440×900 · design-spec §5.5, §4.1, §4.5, §6.1, §6.3.
-> **Status:** planned 2026-08-16, against `5bf2d31`.
+> **Status:** landed 2026-08-16, against `5bf2d31`. Verified: `pnpm turbo run build typecheck
+> lint test` is green across all 8 packages except the pre-existing, unrelated
+> `auth.e2e.spec.ts` rate-limit failure (`AuthThrottlerGuard` commented out on `login` in the
+> working tree — the user's own in-progress change, left untouched per their instruction). The
+> live NFR-10 Playwright run (`apps/web/e2e/tasks.spec.ts`) was **not executed against the
+> shared dev database** — it holds the developer's own hand-created field data, and running the
+> full suite risked mutating it. The board, drag, and create flow were instead verified directly
+> in the developer's own browser session against real data (§10 records what that surfaced).
 >
 > **Figma is reachable from this environment as of 2026-08-16.** Every geometry figure in §1.3
 > is *measured* off the file (`get_metadata` / `get_screenshot` on `24:11420`, file
@@ -385,7 +392,7 @@ Measurable, per architecture §15. No item passes on "looks right".
 | 7 | A task created from `+ Create Task`, from a column `+`, and from `+ Add task` all produce a row in the right column; the field select accepts **no field** and the card renders `Field: —` |
 | 8 | A `watering` task shows the volume input; a `planting` task does not; the value round-trips as m³ |
 | 9 | Deleting a field whose tasks exist nulls `field_id` and leaves the tasks (the schema's `ON DELETE SET NULL` promise) — asserted in `tasks.spec.ts` against real Postgres |
-| 10 | **NFR-7**: a foreign-org task id 404s (not 403) on all five routes, against real RLS, and all five are in the cross-tenant registry |
+| 10 | **NFR-7**: a foreign-org task id 404s (not 403) on all three id-scoped routes (`PATCH /tasks/:id`, `PATCH /tasks/:id/move`, `DELETE /tasks/:id`), against real RLS, and all three are in the cross-tenant registry. **Corrected from "all five" during §2.4/§2.11**: `GET /tasks` and `POST /tasks` take no task id — a create has no existing other-org resource to leak, and a list is scoped by the session's own org, not a path param — so neither has a 404-vs-403 vector this suite can exercise |
 | 11 | **NFR-10**: visual diff ≤ 2% vs the `24:11420` export at 1440×900, with the §1.3 `Pattern` vectors excluded — **and the baseline committed**, closing the gap `shell.spec.ts`, `fields.spec.ts` and `stress.spec.ts` each record |
 | 12 | `fields.spec.ts` and `apps/web/e2e/fields.spec.ts` pass **unchanged** — §2.10's seed additions did not disturb the field cards' activity tags |
 | 13 | `harvesting`'s tag matches a real `24:11420` instance, and `activity-tag.tsx`'s standing note is either removed or restated with what was found |
@@ -431,3 +438,53 @@ Measurable, per architecture §15. No item passes on "looks right".
 | `TASK-home-dashboard` (Phase 4) | Rollups, the Regeneration Score `[VERIFY]`, and the Water Used tile this task's column finally sources |
 | `TASK-tasks-views` | List and Timeline, once designed |
 | Design follow-ups | §2.12's four new gaps |
+
+---
+
+## 10. Decisions and `[VERIFY]`s resolved
+
+All seven §7 decisions taken as recommended (2026-08-16): disabled List/Timeline and Import with
+tooltips, built real Filter/Sort, counts-only for comments/subtasks, `PageContainer` corrected to
+`max-w-[1168px] px-8`, 24 px column gap, `waterVolumeM3` in m³.
+
+**§2.6 `[VERIFY]` resolved:** `@dnd-kit/core@6.3.1` + `@dnd-kit/sortable@10.0.0` installed and
+drag-tested against a throwaway two-column page under React 19.2.8 + Next 16.3.1 with Strict Mode
+on (the app router's default since Next 13.5.1 — confirmed against this repo's own
+`node_modules/next/dist/docs`). A real Playwright test drove a `mouse.down` → `mouse.move` (two
+waypoints) → `mouse.up` sequence and asserted the card re-parented into the drop column; it passed
+on the first authenticated run (the first attempt 404'd into `/login` — `proxy.ts`, Next 16's
+renamed `middleware.ts`, gates every path but `/login` on the `flora_access_token` cookie, and the
+committed `e2e/.auth/owner.json` had gone stale; regenerating it via `auth.setup.ts` fixed it).
+No fallback needed. The verification page, spec, and its throwaway Playwright config were deleted
+after the run; only the two real `package.json` dependency additions remain.
+
+**Live verification, in the developer's own browser (2026-08-16):** the board rendered, drag
+between columns worked, and Create Task wrote a real row — confirmed directly, not just by the
+unexecuted Playwright suite. It surfaced two defects unrelated to this task's own code, both
+fixed live:
+
+1. **`FieldEditor`'s new-field map camera defaulted to a hardcoded Amazonas coordinate**
+   (`components/flora/field-editor.tsx`), regardless of where the org's real fields actually
+   are — the farm row's own `location` point is set once at creation and doesn't move when
+   fields get drawn elsewhere under it later. Fixed by deriving the default camera from the
+   average centroid of the org's existing fields (`field-list-panel.tsx`), falling back to the
+   farm's `location` only when the org has no fields yet.
+2. **`POST /api/v1/auth/refresh` existed on the API (`TASK-auth-tenancy`) but nothing in
+   `apps/web` ever called it** — every session died with the access token's 15-minute TTL
+   instead of the refresh token's real 30-day one, forcing a re-login roughly every 15 minutes
+   of active use. Fixed with `components/flora/session-refresher.tsx`, a client component
+   mounted in `(app)/layout.tsx` that silently `POST`s the refresh endpoint every 10 minutes.
+   The refresh cookie is deliberately path-scoped to `/api/v1/auth/refresh`
+   (`apps/api/src/auth/cookies.ts`) — the browser only attaches it to a request matching that
+   exact path, which is why this has to be a periodic client-side fetch rather than something
+   `proxy.ts` can see or act on for an ordinary page navigation.
+
+Neither is in this task's own affected-files table (§4) — both are pre-existing gaps in
+`TASK-fields` and `TASK-auth-tenancy` respectively, found only because this task's manual
+verification happened to exercise them.
+
+Also live, read-only against the dev database (not a code fix): the "`Field: —`" rows the
+developer saw on every seeded card are correct, not a bug — every one of those tasks genuinely
+has `field_id = NULL`, because the demo fields they were seeded against were deleted in an
+earlier session and the schema's `ON DELETE SET NULL` (§2.4 of `packages/db/src/schema/task.ts`,
+the exact behaviour `tasks.spec.ts` tests) nulled the column rather than deleting the tasks.

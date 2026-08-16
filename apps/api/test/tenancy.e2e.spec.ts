@@ -58,6 +58,18 @@ async function loginAs(
   return asCookieHeader(relayCookies(login));
 }
 
+async function createTask(
+  app: INestApplication,
+  cookies: string,
+  title: string,
+): Promise<string> {
+  const res = await request(getServer(app))
+    .post('/api/v1/tasks')
+    .set('Cookie', cookies)
+    .send({ title, activity: 'watering' });
+  return (res.body as { id: string }).id;
+}
+
 async function createField(
   app: INestApplication,
   cookies: string,
@@ -393,6 +405,63 @@ const REGISTRY: RegistryEntry[] = [
         method: 'delete',
         ownPath: `/api/v1/stress-zones/${zoneAId}`,
         otherPath: `/api/v1/stress-zones/${zoneBId}`,
+      };
+    },
+  },
+  {
+    name: 'PATCH /tasks/:id',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const taskAId = await createTask(app, cookiesA, 'Tenancy Task A');
+      const taskBId = await createTask(app, cookiesB, 'Tenancy Task B');
+      return {
+        cookies: cookiesA,
+        method: 'patch',
+        ownPath: `/api/v1/tasks/${taskAId}`,
+        otherPath: `/api/v1/tasks/${taskBId}`,
+        body: { title: 'Renamed' },
+      };
+    },
+  },
+  {
+    name: 'PATCH /tasks/:id/move',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      const taskAId = await createTask(app, cookiesA, 'Tenancy Move A');
+      const taskBId = await createTask(app, cookiesB, 'Tenancy Move B');
+      return {
+        cookies: cookiesA,
+        method: 'patch',
+        ownPath: `/api/v1/tasks/${taskAId}/move`,
+        otherPath: `/api/v1/tasks/${taskBId}/move`,
+        body: { status: 'in_progress', beforeId: null, afterId: null },
+      };
+    },
+  },
+  {
+    name: 'DELETE /tasks/:id',
+    build: async (app) => {
+      const orgA = await seedUserWithOrg('owner');
+      const orgB = await seedUserWithOrg('owner');
+      const cookiesA = await loginAs(app, orgA.email, orgA.password);
+      const cookiesB = await loginAs(app, orgB.email, orgB.password);
+      // Two of org A's own tasks — the sanity 200 check deletes one, and it
+      // must not be the same task the 404 check targets (same reasoning as
+      // 'DELETE /fields/:id' above).
+      const taskAId = await createTask(app, cookiesA, 'Tenancy Delete A');
+      await createTask(app, cookiesA, 'Tenancy Delete A2');
+      const taskBId = await createTask(app, cookiesB, 'Tenancy Delete B');
+      return {
+        cookies: cookiesA,
+        method: 'delete',
+        ownPath: `/api/v1/tasks/${taskAId}`,
+        otherPath: `/api/v1/tasks/${taskBId}`,
       };
     },
   },

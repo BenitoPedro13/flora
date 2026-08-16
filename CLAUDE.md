@@ -38,8 +38,9 @@ map toolbar's locate/measure/zoom, the grouped detection list, the popover and i
 mutations, the manual-refresh poll, NFR-8's stale badge), and `TASK-satellite-live` (the fix that
 made the CDSE round trip actually work against a real account — `packages/satellite/src/cdse/process.ts`
 now sends `Accept: application/tar` and extracts named TAR members instead of calling
-`res.formData()` on a bare TIFF) have all landed. **Phases 0, 1 and 2 are
-complete**; Phase 3 (`TASK-tasks-board`) is next.
+`res.formData()` on a bare TIFF), and `TASK-tasks-board` (Phase 3, `24:11420` — the third and
+last link of the spine) have all landed. **Phases 0 through 3 are complete**; Phase 4
+(`TASK-home-dashboard`) is next.
 Email+password login with cookie sessions works end to end in a real browser, styled with
 AlignUI tokens; every tenant table is protected by the catalog test in
 `packages/db/src/queries/tenancy.spec.ts`, now a named allowlist of **two** SECURITY DEFINER
@@ -67,8 +68,26 @@ read a job back) and one in the seed script itself (the synthetic raster filled 
 bounding-box rectangle with valid pixels, never clipping to the field's real, possibly
 non-rectangular boundary the way a real CDSE response is clipped server-side — found live, by
 looking at a rendered field, the same lesson `TASK-satellite-pipeline` §10 recorded for its
-flat-ramp bug). Next: `TASK-tasks-board` (Phase 3) — the "create a task from this stress zone"
-button on this screen's popover is its entry point, named and deferred at `TASK-crop-stress` §5.
+flat-ramp bug). `TASK-tasks-board` (`24:11420`) closes the spine: the task domain
+`TASK-domain-schema` shipped and left empty of product — contracts, all-SQL-in-`packages/db`
+queries (`listBoard`'s one grouped query for all three columns, `moveTask`'s server-computed
+midpoint), five `apps/api` endpoints, the Kanban board with a real `@dnd-kit` drag (verified
+against React 19.2.8 + Strict Mode before any board code existed, per its own task doc §2.6),
+and `tasks.water_volume_m3` for Phase 4's Water Used tile (§4.4). Figma became reachable from
+this environment partway through the task, which resolved three things at once: `24:11420`'s
+geometry is measured, not read off prose; `PageContainer`'s `max-w-[1110px]` was corrected to
+`max-w-[1168px]` (68px narrower than the artboard's real content column, confirmed against the
+Page Header instance's own measured width); and NFR-10's baseline is a real Figma export,
+committed at `apps/web/e2e/baselines/tasks-board.png`, closing the gap the three earlier screen
+specs each recorded as unfetchable "in this environment." The "create a task from this stress
+zone" button `TASK-crop-stress` §5 named and deferred is `TASK-stress-to-task`, next in line now
+that a create path exists to hang it off. Two live-discovered fixes rode along, unrelated to the
+board itself: `FieldEditor`'s new-field map camera defaulted to the seed's Amazonas coordinates
+regardless of where an org's real fields actually are (now derived from the org's own field
+centroids); and `POST /api/v1/auth/refresh` existed on the API since `TASK-auth-tenancy` but
+nothing in `apps/web` ever called it, so every session died with the access token's 15-minute
+TTL instead of the refresh token's real 30-day one — a `SessionRefresher` client component now
+renews it silently every 10 minutes. Next: `TASK-home-dashboard` (Phase 4).
 The retired prototype was deleted by `TASK-foundations` after tagging `prototype-v0`;
 `geo_spike`, the schema spike that proved the PostGIS/Drizzle round-trip, was retired by
 `TASK-domain-schema` once `fields` landed.

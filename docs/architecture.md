@@ -184,6 +184,14 @@ the middle tile's label, icon and source change.
 `[VERIFY: confirm the swap with the design owner. If Energy Generated must stay on Home, it
 needs a manual-entry path, which pulls a slice of §11.4 back into scope.]`
 
+**Corrected 2026-08-16 (`TASK-tasks-board` §2.3):** **Water Used** now has a real column to
+read — `tasks.water_volume_m3`, nullable, meaningful only when `activity = 'watering'`, added
+this task specifically so Phase 4 finds data already accumulating rather than shipping a
+migration and retrofitting a form into a screen it doesn't own. The design shows no such field
+anywhere on `24:11420`; its placement in `TaskEditor` is invented (design-spec D20). The swap
+itself still needs the design owner's sign-off — this only closes the "no source" half of the
+`[VERIFY]` above, not the whole thing.
+
 ---
 
 ## 5. Domain model
@@ -322,6 +330,9 @@ harvesting`), `starts_on`, `due_on`, `position numeric`.
 two neighbours rather than a renumbering of the column.
 Plus **`task_assignees`**, **`task_comments`**, **`subtasks`** — the cards show `2` comments
 and `1/5` subtasks.
+**`water_volume_m3` — added 2026-08-16 (`TASK-tasks-board` §2.3).** Nullable `numeric`,
+meaningful only when `activity = 'watering'`; §4.4's Water Used tile reads it once completed
+`watering` tasks accumulate real values.
 
 **`energy_assets`** (`name`, `kind`, `rated_w`, `is_regenerative`) / **`energy_readings`**
 (`PRIMARY KEY (asset_id, recorded_at)`) / **`batteries`**. **Deferred — not created in v1**
@@ -615,10 +626,12 @@ DELETE /api/v1/stress-zones/:id                 soft
 GET    /api/v1/fields/:id/management-zones
 GET    /api/v1/fields/:id/prescriptions         ?scenario=
 
-GET    /api/v1/tasks                            ?status=&fieldId=&view=
-POST   /api/v1/tasks
-PATCH  /api/v1/tasks/:id                        { status, position } → drag-and-drop
-POST   /api/v1/tasks/:id/comments
+GET    /api/v1/tasks                            ?view=board&q=&fieldId=&activity=&sort=  — built (TASK-tasks-board §2.4)
+POST   /api/v1/tasks                                                                     — built
+PATCH  /api/v1/tasks/:id                        general edit — never touches position    — built
+PATCH  /api/v1/tasks/:id/move                   { status, beforeId, afterId } → drag-and-drop, its own route (§2.4's reasoning) — built
+DELETE /api/v1/tasks/:id                                                                 — built
+POST   /api/v1/tasks/:id/comments               — still deferred, no UI calls it (TASK-tasks-board §5, `TASK-task-detail`)
 
 GET    /api/v1/farms/:id/weather                ?days=7
 GET    /api/v1/farms/:id/energy/summary         ?from=&to=
@@ -984,7 +997,7 @@ everything else is sequenced by how directly it serves them.
 | **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell, domain schema (farms/crops/fields/crop_cycles/observations/stress_zones/tasks + children, composite FKs, RLS) — **landed 2026-08-15** (`TASK-foundations`, `TASK-auth-tenancy`, `TASK-design-system-shell`, `TASK-domain-schema`) — **complete** | shell |
 | **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, GeoJSON import, crop cycles, growth/species/quantity, Mapbox list + map — **landed 2026-08-16** (`TASK-fields`) — **complete** (KML/Shapefile import still open, `TASK-fields-import`) | `1:35172` |
 | **2 — Crop Stress** | **Split 2026-08-16 (`TASK-satellite-pipeline` §1.1) into two tasks.** `TASK-satellite-pipeline`: `packages/satellite` + `packages/raster`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, six endpoints — no screen, **landed 2026-08-16** (offline-development seam: `db:seed:satellite` makes the next task buildable with no CDSE credentials). `TASK-crop-stress`: `18:6567` itself — the raster overlay, colour-ramp legend, detection list/popover, date picker, mute/classify/delete, the manual-refresh poll endpoint, NFR-8's stale badge — **landed 2026-08-16** — **complete** (the live CDSE round trip is still open, `TASK-satellite-live`) | `18:6567` |
-| **3 — Tasks** | Task domain scoped to fields, board with drag, list, timeline, watering volumes (§4.4) | `24:11420` |
+| **3 — Tasks** | Task domain scoped to fields, board with drag, watering volumes (§4.4) — **landed 2026-08-16** (`TASK-tasks-board`) — **complete** (List/Timeline still undesigned, design-spec D4; `TASK-tasks-views` picks them up once they are) | `24:11420` |
 | **4 — Home** | Rollups, scoring, re-sourced KPI row (§4.4), all Home widgets | `1:12913` |
 | **5 — Weather** | Open-Meteo ingest + console | `3:5274` |
 | **6 — Management** | Zones, prescriptions, scenarios | `15:8608` |

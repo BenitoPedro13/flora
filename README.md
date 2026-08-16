@@ -3,13 +3,14 @@
 An operations console for a regenerative farm — fields, crops, satellite-derived crop health,
 tasks, and weather.
 
-**Status:** Phases 0, 1 and 2 are complete. Foundations
+**Status:** Phases 0 through 3 are complete. Foundations
 (`docs/tasks/TASK-foundations.md`), identity/tenancy (`docs/tasks/TASK-auth-tenancy.md`), the
 design-system shell (`docs/tasks/TASK-design-system-shell.md`), the domain schema
 (`docs/tasks/TASK-domain-schema.md`), Fields & Crops (`docs/tasks/TASK-fields.md`), the
 satellite pipeline's write path (`docs/tasks/TASK-satellite-pipeline.md`), the Crop Stress
-screen (`docs/tasks/TASK-crop-stress.md`), and the live CDSE round-trip fix
-(`docs/tasks/TASK-satellite-live.md`) have all landed:
+screen (`docs/tasks/TASK-crop-stress.md`), the live CDSE round-trip fix
+(`docs/tasks/TASK-satellite-live.md`), and the Tasks board
+(`docs/tasks/TASK-tasks-board.md`) have all landed:
 pnpm/Turborepo monorepo, Docker infra, the ten domain tables (farms, crops, fields, crop_cycles,
 observations, stress_zones, tasks + its three children) with composite foreign keys and RLS,
 email+password login with cookie sessions, row-level security enforced twice (repository filter
@@ -27,9 +28,14 @@ development — no CDSE credentials needed locally. `TASK-satellite-live` closed
 in that write path: `packages/satellite/src/cdse/process.ts` now sends `Accept: application/tar`
 and extracts the two named TAR members CDSE actually returns, instead of the bare-TIFF/`res.formData()`
 mismatch that failed every real refresh; a manual refresh on Field 237 now completes end to end
-against a real account and writes a real observation. `/` still renders the session
-sentence. Next: Tasks (`TASK-tasks-board`, Phase 3) — the "create a task from this stress zone"
-action on the Crop Stress popover is its entry point.
+against a real account and writes a real observation. `/tasks` (`24:11420`) closes the spine:
+a Kanban board over the task domain — five `apps/api` endpoints, server-computed drag positions
+(`PATCH /tasks/:id/move`), and `tasks.water_volume_m3` sourcing Phase 4's Water Used tile. List
+and Timeline views and Import ship disabled (undesigned); the board's own NFR-10 baseline is a
+real Figma export this environment could finally reach. `/` still renders the session sentence.
+Next: Home (`TASK-home-dashboard`, Phase 4) — the "create a task from this stress zone" action
+on the Crop Stress popover is `TASK-stress-to-task`'s entry point, buildable now that Tasks has
+a create path.
 See `docs/architecture.md` (system, v2) and
 `docs/design-spec.md` (visual) for the full picture — `CLAUDE.md` for how work happens in this
 repo.

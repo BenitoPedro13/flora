@@ -3,6 +3,7 @@ import { AuthModule } from './auth/auth.module.js';
 import { FieldsModule } from './fields/fields.module.js';
 import { HealthModule } from './health/health.module.js';
 import { ObservationsModule } from './observations/observations.module.js';
+import { TasksModule } from './tasks/tasks.module.js';
 import { TenancyModule } from './tenancy/tenancy.module.js';
 
 @Module({
@@ -12,6 +13,7 @@ import { TenancyModule } from './tenancy/tenancy.module.js';
     HealthModule,
     FieldsModule,
     ObservationsModule,
+    TasksModule,
   ],
 })
 export class AppModule {}

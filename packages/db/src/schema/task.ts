@@ -46,6 +46,13 @@ export const tasks = pgTable(
     startsOn: date("starts_on"),
     dueOn: date("due_on"),
     position: numeric("position").notNull(),
+    /**
+     * SI (m³), architecture §5.3 — the Home "Water Used" tile's future
+     * source (architecture §4.4, TASK-tasks-board §2.3). Meaningful only
+     * when `activity = 'watering'`; the design shows no such field, so its
+     * placement in the editor is invented and logged as a gap.
+     */
+    waterVolumeM3: numeric("water_volume_m3"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

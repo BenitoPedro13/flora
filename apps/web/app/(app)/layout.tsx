@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session";
 import { getSidebarCollapsed } from "@/lib/sidebar-state";
 import { QueryProvider } from "@/lib/query-client";
 import { AppSidebar } from "@/components/flora/app-sidebar";
+import { SessionRefresher } from "@/components/flora/session-refresher";
 
 /**
  * The Flora shell (TASK-design-system-shell §2.8): AppSidebar + a fluid
@@ -20,6 +21,7 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
 
   return (
     <QueryProvider>
+      <SessionRefresher />
       <div className="flex h-screen w-full">
         <AppSidebar session={session} defaultCollapsed={collapsed} />
         <main className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</main>

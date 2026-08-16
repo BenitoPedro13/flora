@@ -7,6 +7,7 @@ export * from "./queries/farms.js";
 export * from "./queries/observations.js";
 export * from "./queries/stress-zones.js";
 export * from "./queries/satellite-upsert.js";
+export * from "./queries/tasks.js";
 export * from "./tenancy.js";
 export * from "./schema/index.js";
 export * from "./assert-rls.js";
