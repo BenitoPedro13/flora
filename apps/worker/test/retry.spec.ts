@@ -33,7 +33,8 @@ describe('satellite queue retry behaviour', () => {
 
     const worker = new Worker(
       queueName,
-      () => {
+      // eslint-disable-next-line @typescript-eslint/require-await -- BullMQ's Processor type requires an async function; this test double has nothing to await.
+      async () => {
         attempts++;
         if (attempts < 3) {
           throw new Error('transient CDSE failure');
@@ -69,7 +70,8 @@ describe('satellite queue retry behaviour', () => {
 
     const worker = new Worker(
       queueName,
-      () => {
+      // eslint-disable-next-line @typescript-eslint/require-await -- BullMQ's Processor type requires an async function; this test double has nothing to await.
+      async () => {
         attempts++;
         // refresh.processor.ts catches NoSceneError internally and returns
         // without rethrowing — modeled directly here, since that's the exact

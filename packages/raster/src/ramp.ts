@@ -39,7 +39,16 @@ function rampColor(t: number): [number, number, number] {
 export async function renderRasterPng(raster: DecodedRaster, stats: ObservationStats): Promise<Buffer> {
   const { width, height, indexValues } = raster;
   const rgba = new Uint8Array(width * height * 4);
+
+  // p10 === p90 whenever the stressed population is under ~10% of the field
+  // (detect.ts's own threshold rule) — the percentile domain collapses to a
+  // single value even though real variation exists. Falling back to the
+  // observation's own min/max keeps the PNG legible in exactly the case the
+  // relative ramp is otherwise blind to; detect.ts is unaffected; it always
+  // compares against p10 directly, never this domain.
   const domain = stats.p90 - stats.p10;
+  const [lo, hi] = domain > 0 ? [stats.p10, stats.p90] : [stats.min, stats.max];
+  const span = hi - lo;
 
   for (let i = 0; i < indexValues.length; i++) {
     const v = indexValues[i]!;
@@ -48,7 +57,7 @@ export async function renderRasterPng(raster: DecodedRaster, stats: ObservationS
       rgba[offset + 3] = 0;
       continue;
     }
-    const t = domain > 0 ? (v - stats.p10) / domain : 0.5;
+    const t = span > 0 ? (v - lo) / span : 0.5;
     const [r, g, b] = rampColor(t);
     rgba[offset] = r;
     rgba[offset + 1] = g;

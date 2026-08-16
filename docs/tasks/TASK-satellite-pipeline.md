@@ -804,6 +804,22 @@ immediately against real PostGIS; the fix is `ST_Intersection(geography, geograp
 §2.10 insists on real PostGIS for anything touching geometry — this bug produces no error, just
 a silently-wrong boolean.
 
+**Second bug, found only by actually looking at a rendered PNG** (not by any automated test —
+recorded here as a gap in test coverage, not just a fix): `ramp.ts`'s relative colour ramp used
+`stats.p10`→`stats.p90` as its domain, with a `t = 0.5` fallback when `p10 === p90`. That
+equality is not an edge case — it is the **normal** state for any field whose stressed pixels
+sit under detect.ts's own ~10% population threshold (§10's seed deviation note above), because
+neither percentile then falls outside the dominant background value. The fallback painted the
+*entire* field one flat colour, silently hiding real variation (including the exact stress
+zones the same observation's `stress_zones` rows correctly recorded) — detection was unaffected
+(`detect.ts` compares against `p10` directly, never this domain), but the PNG was useless.
+Caught by fetching an actual seeded raster and looking at it, not by `ramp.spec.ts`'s only test
+at the time (which used a contrived `p10 != p90`). Fixed by falling back to the observation's
+own `min`/`max` span instead of a fixed midpoint; `ramp.spec.ts` now has a dedicated test for
+the degenerate-domain case. Worth remembering for `TASK-crop-stress`: **a passing test suite is
+not the same as a raster that looks right** — spot-check an actual rendered PNG, not just the
+pipeline's return values.
+
 ### §7 decisions, as taken
 
 All six taken as recommended: (1) the split — yes; (2) the second `SECURITY DEFINER` function
