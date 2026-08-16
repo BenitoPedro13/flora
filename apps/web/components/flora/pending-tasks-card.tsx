@@ -18,7 +18,7 @@ export function PendingTasksCard({ tasks }: { tasks: Task[] }) {
 
       <div className="mt-4 flex flex-col gap-2">
         {tasks.length === 0 ? (
-          <p className="text-paragraph-xs text-text-soft-400">Nothing pending — you're all caught up.</p>
+          <p className="text-paragraph-xs text-text-soft-400">Nothing pending — you&apos;re all caught up.</p>
         ) : (
           tasks.map((task) => <TaskCard key={task.id} task={task} compact />)
         )}

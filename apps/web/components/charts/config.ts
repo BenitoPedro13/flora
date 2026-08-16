@@ -19,8 +19,17 @@ export const chartGridStroke = "var(--color-stroke-soft-200)";
 
 export const chartAxisLabelClassName = "text-paragraph-xs text-text-soft-400";
 
+/**
+ * **Corrected 2026-08-16 (TASK-weather §2.5, flagged by TASK-home-dashboard
+ * §10):** was `background: var(--color-bg-strong-950)` — a *semantic* token
+ * that inverts under dark mode, unlike the *static* pair used here, which
+ * doesn't. The vendored `components/ui/chart.tsx` tooltip default
+ * (shadcn's `bg-background`, undefined in AlignUI) is a separate,
+ * still-open follow-up (invariant 8) — this only fixes the constant this
+ * project's own call sites already override with.
+ */
 export const chartTooltipStyle = {
-  background: "var(--color-bg-strong-950)",
+  background: "var(--color-static-black)",
   color: "var(--color-static-white)",
 } as const;
 

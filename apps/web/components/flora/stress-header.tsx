@@ -3,13 +3,13 @@
 import * as React from "react";
 import { RiCalendarLine, RiInformationLine, RiLandscapeLine, RiRadarFill } from "@remixicon/react";
 import type { Field, FieldSummary, ObservationIndex } from "@flora/contracts";
-import * as Badge from "@/components/ui/badge";
 import { Calendar } from "@/components/ui/datepicker";
 import * as Popover from "@/components/ui/popover";
 import * as Select from "@/components/ui/select";
 import * as Tooltip from "@/components/ui/tooltip";
 import { IconTile } from "@/components/flora/icon-tile";
 import { PageHeader } from "@/components/flora/page-header";
+import { StaleBadge } from "@/components/flora/stale-badge";
 
 /**
  * The competitor reference menu (`TASK-spectral-indices`, header note) lists
@@ -247,16 +247,10 @@ export function StressHeader({
         <div className="flex items-center gap-2">
           <h2 className="text-title-h4 text-text-strong-950">Crop Stress</h2>
           {isStale && currentField.lastRefreshSucceededAt ? (
-            <Tooltip.Root delayDuration={200}>
-              <Tooltip.Trigger asChild>
-                <span>
-                  <Badge.Root variant="light" color="orange" size="medium">
-                    Stale · last updated {formatBadgeDate(currentField.lastRefreshSucceededAt)}
-                  </Badge.Root>
-                </span>
-              </Tooltip.Trigger>
-              <Tooltip.Content side="bottom">{currentField.lastRefreshError}</Tooltip.Content>
-            </Tooltip.Root>
+            <StaleBadge
+              label={`Stale · last updated ${formatBadgeDate(currentField.lastRefreshSucceededAt)}`}
+              reason={currentField.lastRefreshError ?? ""}
+            />
           ) : null}
         </div>
 

@@ -64,9 +64,16 @@ export type ListObservationDatesQuery = z.infer<typeof listObservationDatesQuery
  * RGB fetch, never scheduled, never bundled into the bulk call — nobody
  * needs yesterday's photo daily.
  */
-export const refreshRequestSchema = z.object({
-  mode: z.literal("true_color").optional(),
-});
+export const refreshRequestSchema = z
+  .object({
+    mode: z.literal("true_color").optional(),
+  })
+  // A truly bodyless POST (no `Content-Type`, nothing after `json()`'s
+  // middleware) leaves `req.body` as `undefined`, not `{}` — found live,
+  // e2e: `z.object({...})` on its own rejects `undefined` even though every
+  // field is optional, 400ing the exact "omitted body" case this schema's
+  // own doc comment above promises works.
+  .default({});
 export type RefreshRequest = z.infer<typeof refreshRequestSchema>;
 
 /**

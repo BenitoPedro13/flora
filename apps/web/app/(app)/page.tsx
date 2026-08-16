@@ -60,7 +60,7 @@ export default async function HomePage() {
               </CompactButton.Root>
             </span>
           </Tooltip.Trigger>
-          <Tooltip.Content>Search isn't built yet</Tooltip.Content>
+          <Tooltip.Content>Search isn&apos;t built yet</Tooltip.Content>
         </Tooltip.Root>
       </Tooltip.Provider>
       <Tooltip.Provider>
@@ -72,7 +72,7 @@ export default async function HomePage() {
               </CompactButton.Root>
             </span>
           </Tooltip.Trigger>
-          <Tooltip.Content>Notifications aren't built yet</Tooltip.Content>
+          <Tooltip.Content>Notifications aren&apos;t built yet</Tooltip.Content>
         </Tooltip.Root>
       </Tooltip.Provider>
       <CreateTaskButton fields={fieldsPage.items} />

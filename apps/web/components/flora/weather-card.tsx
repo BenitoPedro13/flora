@@ -29,7 +29,7 @@ export function WeatherCard({ weather }: { weather: DashboardWeather }) {
         {weather.today ? (
           <WeatherDayCard day={weather.today} isToday />
         ) : (
-          <p className="text-paragraph-xs text-text-soft-400">No forecast yet — the ingest job hasn't run for this farm.</p>
+          <p className="text-paragraph-xs text-text-soft-400">No forecast yet — the ingest job hasn&apos;t run for this farm.</p>
         )}
         {weather.tomorrow ? <WeatherDayCard day={weather.tomorrow} isToday={false} /> : null}
       </div>

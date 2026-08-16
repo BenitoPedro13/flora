@@ -8,11 +8,12 @@ import {
   memberships,
   organizations,
   upsertObservation,
+  upsertWeatherSnapshots,
   users,
   withOrganization,
 } from '@flora/db';
 import type { Database } from '@flora/db';
-import type { ObservationIndex, Role } from '@flora/contracts';
+import type { ObservationIndex, Role, WeatherSnapshotPayload } from '@flora/contracts';
 import { hash } from '@node-rs/argon2';
 import { sql } from 'drizzle-orm';
 import { AppModule } from '../src/app.module.js';
@@ -167,6 +168,50 @@ export async function seedObservation(
       sceneId: `test-scene-${capturedOn}`,
     });
   });
+}
+
+/**
+ * Same reasoning as `seedObservation` — no HTTP endpoint writes weather
+ * (only the worker's hourly job does). Writes 8 horizons, each with a full
+ * 24-hour `hours` series, so `GET /farms/:id/weather` has something real to
+ * read (TASK-weather §6 item 4).
+ */
+export async function seedWeather(
+  organizationId: string,
+  farmId: string,
+  observedAt = new Date(),
+): Promise<void> {
+  const db = await getOwnerDb();
+  const days: WeatherSnapshotPayload[] = Array.from({ length: 8 }, (_, i) => {
+    const d = new Date('2026-08-16T00:00:00Z');
+    d.setUTCDate(d.getUTCDate() + i);
+    const date = d.toISOString().slice(0, 10);
+    return {
+      date,
+      tempMaxC: 28 + i,
+      tempMinC: 18 + i,
+      weatherCode: 1,
+      precipitationMm: 0,
+      windSpeedMaxKmh: 15,
+      uvIndexMax: 7.5,
+      sunrise: `${date}T06:30`,
+      sunset: `${date}T18:06`,
+      precipProbabilityMaxPct: 10,
+      windDirectionDominantDeg: 80,
+      hours: Array.from({ length: 24 }, (_, h) => ({
+        time: `${date}T${String(h).padStart(2, '0')}:00`,
+        temperatureC: 20 + (h % 12),
+        windSpeedKmh: 10 + h,
+        windDirectionDeg: (80 + h) % 360,
+        pressureMslHpa: 1016 + (h % 3),
+        uvIndex: h >= 6 && h <= 18 ? 5 : 0,
+        precipProbabilityPct: 10,
+      })),
+    };
+  });
+  await withOrganization(db, organizationId, (tx) =>
+    upsertWeatherSnapshots(tx, organizationId, farmId, observedAt, days),
+  );
 }
 
 /** Same reasoning as `seedObservation` — no HTTP endpoint writes a stress zone. Returns the new zone's id. */

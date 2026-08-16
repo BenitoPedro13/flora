@@ -155,35 +155,19 @@ export const dashboardWeatherSchema = z.object({
 export type DashboardWeather = z.infer<typeof dashboardWeatherSchema>;
 
 /**
- * `weather_snapshots.horizon` — forecast lead in days from the ingestion
- * run named by `observed_at` (§2.6). `"0"` is today, `"1"` is tomorrow —
- * the only two Home reads; `"2"`–`"7"` are fetched and stored in the same
- * Open-Meteo call for Phase 5's 7-day screen, unread until then.
+ * `weatherHorizonValues`/`weatherHorizonSchema`/`WeatherHorizon` and
+ * `weatherSnapshotPayloadSchema`/`WeatherSnapshotPayload` moved to
+ * `./weather.js` (TASK-weather §2.2) now that a weather domain exists beyond
+ * this file's original two-day Home read. Re-exported here so no import in
+ * `apps/api`, `apps/worker` or `packages/db` breaks.
  */
-export const weatherHorizonValues = ["0", "1", "2", "3", "4", "5", "6", "7"] as const;
-export const weatherHorizonSchema = z.enum(weatherHorizonValues);
-export type WeatherHorizon = z.infer<typeof weatherHorizonSchema>;
-
-/**
- * `weather_snapshots.payload` — one calendar day of Open-Meteo daily-block
- * output. `[VERIFY: parameter names against Open-Meteo's current docs
- * before shipping — architecture §11.3]`.
- */
-export const weatherSnapshotPayloadSchema = z.object({
-  date: z.iso.date(),
-  tempMaxC: z.number(),
-  tempMinC: z.number(),
-  weatherCode: z.number().int(),
-  precipitationMm: z.number().nonnegative(),
-  windSpeedMaxKmh: z.number().nonnegative(),
-  uvIndexMax: z.number().nonnegative().optional(),
-  // Open-Meteo's local-time ISO strings (e.g. "2026-08-16T06:12") aren't
-  // full RFC3339 — no offset, no seconds — so these stay plain strings
-  // rather than z.iso.datetime(), which would reject them.
-  sunrise: z.string().optional(),
-  sunset: z.string().optional(),
-});
-export type WeatherSnapshotPayload = z.infer<typeof weatherSnapshotPayloadSchema>;
+export {
+  weatherHorizonValues,
+  weatherHorizonSchema,
+  type WeatherHorizon,
+  weatherSnapshotPayloadSchema,
+  type WeatherSnapshotPayload,
+} from "./weather.js";
 
 // ---------------------------------------------------------------------------
 // `farm_daily_rollups.payload` — everything `buildFarmRollup` computes once a

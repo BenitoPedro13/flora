@@ -5,7 +5,7 @@ import { organizations, users } from "../schema/auth.js";
 import { startTestInfra, type TestInfra } from "../test/containers.js";
 import { withOrganization } from "../tenancy.js";
 import { getLatestWeather } from "./rollups.js";
-import { upsertWeatherSnapshots } from "./weather.js";
+import { getFarmWeek, upsertWeatherSnapshots } from "./weather.js";
 
 /** Integration suite against real testcontainers PostGIS (TASK-home-dashboard §2.14). */
 
@@ -67,6 +67,42 @@ describe("weather queries", () => {
 
       const weather = await getLatestWeather(tx, orgId, farmId);
       expect(weather.today?.tempC).toBe(99);
+    });
+  });
+
+  describe("getFarmWeek", () => {
+    it("returns the newer of two ingestion runs, for every horizon", async () => {
+      await withOrganization(owner.db, orgId, async (tx) => {
+        const older = Array.from({ length: 8 }, (_, i) => day(i, 10 + i));
+        await upsertWeatherSnapshots(tx, orgId, farmId, new Date("2026-08-16T06:00:00Z"), older);
+        const newer = Array.from({ length: 8 }, (_, i) => day(i, 50 + i));
+        await upsertWeatherSnapshots(tx, orgId, farmId, new Date("2026-08-16T07:00:00Z"), newer);
+
+        const week = await getFarmWeek(tx, orgId, farmId, 8);
+        expect(week.days).toHaveLength(8);
+        expect(week.days.map((d) => d.payload.tempMaxC)).toEqual([50, 51, 52, 53, 54, 55, 56, 57]);
+        expect(week.observedAt?.toISOString()).toBe(new Date("2026-08-16T07:00:00Z").toISOString());
+      });
+    });
+
+    it("clamps to `days`, returning exactly horizons 0-2 in order for days=3", async () => {
+      await withOrganization(owner.db, orgId, async (tx) => {
+        const week = await getFarmWeek(tx, orgId, farmId, 3);
+        expect(week.days.map((d) => d.horizon)).toEqual(["0", "1", "2"]);
+      });
+    });
+
+    it("a row written without the new optional fields still round-trips", async () => {
+      await withOrganization(owner.db, orgId, async (tx) => {
+        // No `hours`, no `precipProbabilityMaxPct`, no `windDirectionDominantDeg` —
+        // exactly the shape every row in the table had before TASK-weather.
+        await upsertWeatherSnapshots(tx, orgId, farmId, new Date("2026-08-16T08:00:00Z"), [day(0, 20)]);
+
+        const week = await getFarmWeek(tx, orgId, farmId, 1);
+        expect(week.days).toHaveLength(1);
+        expect(week.days[0]!.payload.hours).toBeUndefined();
+        expect(week.days[0]!.payload.tempMaxC).toBe(20);
+      });
     });
   });
 });
