@@ -154,12 +154,6 @@ async function main() {
       throw new Error(`seed org '${SEED_ORG_SLUG}' not found — run 'pnpm db:seed' first`);
     }
 
-    const existing = await db.select().from(fields).where(eq(fields.organizationId, org.id)).limit(1);
-    if (existing.length > 0) {
-      console.log("Demo fields already exist — skipping");
-      return;
-    }
-
     const orgCrops = await db.select().from(crops).where(eq(crops.organizationId, org.id));
     const cropByName = new Map(orgCrops.map((c) => [c.name, c]));
 
@@ -171,152 +165,215 @@ async function main() {
       throw new Error(`seed farm '${SEED_FARM_NAME}' not found — run 'pnpm db:seed' first`);
     }
 
-    const [ownerMembership] = await db.select().from(memberships).where(eq(memberships.organizationId, org.id)).limit(1);
-    if (!ownerMembership) {
-      throw new Error(`no membership found for org '${SEED_ORG_SLUG}' — run 'pnpm db:seed' first`);
-    }
-
-    const teammateIds: string[] = [];
-    for (const teammate of SEED_TEAMMATES) {
-      const passwordHash = await hash(`${teammate.email}-unused-seed-password`, ARGON2_OPTIONS);
-      const [user] = await db.insert(users).values({ email: teammate.email, passwordHash, name: teammate.name }).returning();
-      await db.insert(memberships).values({ organizationId: org.id, userId: user!.id, role: "operator" });
-      teammateIds.push(user!.id);
-    }
-    const assigneePool = [ownerMembership.userId, ...teammateIds];
-
     const today = farmLocalToday(SEED_FARM_TIMEZONE);
 
-    /**
-     * Comments, subtasks and assignees on a real task row — so the card's
-     * `2` comment count, `1/5` subtask fraction and avatar group are genuine
-     * (§2.10), not the mock's fixed numbers. Varies by `seedIndex` only to
-     * avoid every card looking identical.
-     */
-    async function enrichTask(tx: Tx, taskId: string, seedIndex: number) {
-      await tx.insert(taskComments).values([
-        { organizationId: org.id, taskId, authorId: ownerMembership.userId, body: "Checked the field this morning, looks on track." },
-        { organizationId: org.id, taskId, authorId: assigneePool[seedIndex % assigneePool.length]!, body: "Will follow up tomorrow." },
-      ]);
-
-      const subtaskCount = 3 + (seedIndex % 3);
-      const doneCount = seedIndex % (subtaskCount + 1);
-      await tx.insert(subtasks).values(
-        Array.from({ length: subtaskCount }, (_, k) => ({
-          organizationId: org.id,
-          taskId,
-          title: `Step ${k + 1}`,
-          doneAt: k < doneCount ? new Date() : null,
-          position: String(k + 1),
-        })),
-      );
-
-      const assigneeCount = 1 + (seedIndex % 2);
-      const assignees = Array.from(new Set([assigneePool[seedIndex % assigneePool.length]!, ...assigneePool])).slice(0, assigneeCount);
-      await tx.insert(taskAssignees).values(assignees.map((userId) => ({ organizationId: org.id, taskId, userId })));
+    // The four-field demo fixture (fields + growing cycle + tasks) is
+    // created once, only when the org has no fields at all — a farmer's own
+    // fields (created through the app, not this script) must never be
+    // touched or duplicated by it (§2.12's "add rows, never repurpose").
+    const existing = await db.select().from(fields).where(eq(fields.organizationId, org.id)).limit(1);
+    if (existing.length === 0) {
+      await seedDemoFieldsAndTasks(db, org.id, farm.id, cropByName, today);
+    } else {
+      console.log(`Org already has field(s) — skipping demo field/task creation, backfilling history only`);
     }
 
-    await withOrganization(db, org.id, async (tx) => {
-      let seedIndex = 0;
-      for (const [i, demoField] of DEMO_FIELDS.entries()) {
-        const fieldId = await insertField(tx, {
-          organizationId: org.id,
-          farmId: farm.id,
-          name: demoField.name,
-          boundary: rectangleBoundary(demoField.center),
-          position: i + 1,
-        });
-
-        const crop = cropByName.get(demoField.cropName);
-        if (!crop) {
-          throw new Error(`seed crop '${demoField.cropName}' not found — run 'pnpm db:seed' first`);
-        }
-
-        const plantedOn = addDays(today, -demoField.growthPct);
-        const expectedHarvestOn = addDays(plantedOn, CYCLE_DAYS);
-
-        await tx.insert(cropCycles).values({
-          organizationId: org.id,
-          fieldId,
-          cropId: crop.id,
-          plantedOn: isoDate(plantedOn),
-          expectedHarvestOn: isoDate(expectedHarvestOn),
-          status: "growing",
-          quantityKg: String(demoField.quantityKg),
-        });
-
-        // Non-done tasks whose distinct activities render as the card's
-        // activity tags (TASK-domain-schema §7, resolved by TASK-fields §1.1).
-        // These eight rows are exactly what `fields.spec.ts` and
-        // `apps/web/e2e/fields.spec.ts` assert their activity tags against
-        // (§2.10's constraint) — extended with real progress/dates and
-        // `enrichTask`, never repurposed to a different status or activity.
-        for (const [j, activity] of demoField.activities.entries()) {
-          const [row] = await tx
-            .insert(tasks)
-            .values({
-              organizationId: org.id,
-              fieldId,
-              title: `${activity.replace("_", " ")} — ${demoField.name}`,
-              status: j === 0 ? "todo" : "in_progress",
-              activity,
-              progressPct: j === 0 ? 15 : 55,
-              startsOn: isoDate(addDays(today, -3)),
-              dueOn: isoDate(addDays(today, 11)),
-              position: String(j + 1),
-            })
-            .returning({ id: tasks.id });
-          await enrichTask(tx, row!.id, seedIndex++);
-        }
-
-        // A third, `done` task per field — the board needs a populated
-        // third column, and the seed previously produced none (§1.1, §2.10).
-        // A new row, not a repurposing of the two above.
-        const doneActivity = demoField.activities[0]!;
-        const [doneRow] = await tx
-          .insert(tasks)
-          .values({
-            organizationId: org.id,
-            fieldId,
-            title: `${doneActivity.replace("_", " ")} — ${demoField.name} (completed)`,
-            status: "done",
-            activity: doneActivity,
-            progressPct: 100,
-            startsOn: isoDate(addDays(today, -14)),
-            dueOn: isoDate(addDays(today, -1)),
-            waterVolumeM3: doneActivity === "watering" ? "4.5" : null,
-            position: "1",
-          })
-          .returning({ id: tasks.id });
-        await enrichTask(tx, doneRow!.id, seedIndex++);
-
-        // §2.12: 12 months of harvested history, rotated per field so the
-        // farm as a whole grows all four crops across the year.
-        for (const [offsetIndex, harvestOffsetDays] of HISTORICAL_HARVEST_OFFSETS_DAYS.entries()) {
-          const cropName = HISTORICAL_CROPS[(i + offsetIndex) % HISTORICAL_CROPS.length]!;
-          const historicalCrop = cropByName.get(cropName);
-          if (!historicalCrop) {
-            throw new Error(`seed crop '${cropName}' not found — run 'pnpm db:seed' first`);
-          }
-          const harvestedOn = addDays(today, -harvestOffsetDays);
-          const historicalPlantedOn = addDays(harvestedOn, -HISTORICAL_CYCLE_DAYS);
-          await tx.insert(cropCycles).values({
-            organizationId: org.id,
-            fieldId,
-            cropId: historicalCrop.id,
-            plantedOn: isoDate(historicalPlantedOn),
-            expectedHarvestOn: isoDate(harvestedOn),
-            status: "harvested",
-            quantityKg: String(400 + i * 50 + offsetIndex * 30),
-          });
-        }
-      }
-    });
-
-    console.log(`Seeded ${DEMO_FIELDS.length} demo fields, crop cycles and tasks for org ${org.slug}`);
+    // §2.12: 12 months of harvested history, on **whatever fields the org
+    // actually has** — the four just-seeded demo fields, or a farmer's own,
+    // real fields. Idempotent per field (skips a field that already has any
+    // harvested cycle), so this is safe to run again after the app has since
+    // added more real data.
+    const historyCount = await backfillHistoricalCropCycles(db, org.id, farm.id, cropByName, today);
+    console.log(`Backfilled 12-month harvested history for ${historyCount} field(s)`);
   } finally {
     await pool.end();
   }
+}
+
+async function seedDemoFieldsAndTasks(
+  db: ReturnType<typeof createDbClient>["db"],
+  organizationId: string,
+  farmId: string,
+  cropByName: Map<string, { id: string }>,
+  today: Date,
+): Promise<void> {
+  const [ownerMembership] = await db.select().from(memberships).where(eq(memberships.organizationId, organizationId)).limit(1);
+  if (!ownerMembership) {
+    throw new Error(`no membership found for org — run 'pnpm db:seed' first`);
+  }
+
+  const teammateIds: string[] = [];
+  for (const teammate of SEED_TEAMMATES) {
+    const passwordHash = await hash(`${teammate.email}-unused-seed-password`, ARGON2_OPTIONS);
+    const [user] = await db.insert(users).values({ email: teammate.email, passwordHash, name: teammate.name }).returning();
+    await db.insert(memberships).values({ organizationId, userId: user!.id, role: "operator" });
+    teammateIds.push(user!.id);
+  }
+  const assigneePool = [ownerMembership.userId, ...teammateIds];
+
+  /**
+   * Comments, subtasks and assignees on a real task row — so the card's
+   * `2` comment count, `1/5` subtask fraction and avatar group are genuine
+   * (§2.10), not the mock's fixed numbers. Varies by `seedIndex` only to
+   * avoid every card looking identical.
+   */
+  async function enrichTask(tx: Tx, taskId: string, seedIndex: number) {
+    await tx.insert(taskComments).values([
+      { organizationId, taskId, authorId: ownerMembership.userId, body: "Checked the field this morning, looks on track." },
+      { organizationId, taskId, authorId: assigneePool[seedIndex % assigneePool.length]!, body: "Will follow up tomorrow." },
+    ]);
+
+    const subtaskCount = 3 + (seedIndex % 3);
+    const doneCount = seedIndex % (subtaskCount + 1);
+    await tx.insert(subtasks).values(
+      Array.from({ length: subtaskCount }, (_, k) => ({
+        organizationId,
+        taskId,
+        title: `Step ${k + 1}`,
+        doneAt: k < doneCount ? new Date() : null,
+        position: String(k + 1),
+      })),
+    );
+
+    const assigneeCount = 1 + (seedIndex % 2);
+    const assignees = Array.from(new Set([assigneePool[seedIndex % assigneePool.length]!, ...assigneePool])).slice(0, assigneeCount);
+    await tx.insert(taskAssignees).values(assignees.map((userId) => ({ organizationId, taskId, userId })));
+  }
+
+  await withOrganization(db, organizationId, async (tx) => {
+    let seedIndex = 0;
+    for (const [i, demoField] of DEMO_FIELDS.entries()) {
+      const fieldId = await insertField(tx, {
+        organizationId,
+        farmId,
+        name: demoField.name,
+        boundary: rectangleBoundary(demoField.center),
+        position: i + 1,
+      });
+
+      const crop = cropByName.get(demoField.cropName);
+      if (!crop) {
+        throw new Error(`seed crop '${demoField.cropName}' not found — run 'pnpm db:seed' first`);
+      }
+
+      const plantedOn = addDays(today, -demoField.growthPct);
+      const expectedHarvestOn = addDays(plantedOn, CYCLE_DAYS);
+
+      await tx.insert(cropCycles).values({
+        organizationId,
+        fieldId,
+        cropId: crop.id,
+        plantedOn: isoDate(plantedOn),
+        expectedHarvestOn: isoDate(expectedHarvestOn),
+        status: "growing",
+        quantityKg: String(demoField.quantityKg),
+      });
+
+      // Non-done tasks whose distinct activities render as the card's
+      // activity tags (TASK-domain-schema §7, resolved by TASK-fields §1.1).
+      // These eight rows are exactly what `fields.spec.ts` and
+      // `apps/web/e2e/fields.spec.ts` assert their activity tags against
+      // (§2.10's constraint) — extended with real progress/dates and
+      // `enrichTask`, never repurposed to a different status or activity.
+      for (const [j, activity] of demoField.activities.entries()) {
+        const [row] = await tx
+          .insert(tasks)
+          .values({
+            organizationId,
+            fieldId,
+            title: `${activity.replace("_", " ")} — ${demoField.name}`,
+            status: j === 0 ? "todo" : "in_progress",
+            activity,
+            progressPct: j === 0 ? 15 : 55,
+            startsOn: isoDate(addDays(today, -3)),
+            dueOn: isoDate(addDays(today, 11)),
+            position: String(j + 1),
+          })
+          .returning({ id: tasks.id });
+        await enrichTask(tx, row!.id, seedIndex++);
+      }
+
+      // A third, `done` task per field — the board needs a populated
+      // third column, and the seed previously produced none (§1.1, §2.10).
+      // A new row, not a repurposing of the two above.
+      const doneActivity = demoField.activities[0]!;
+      const [doneRow] = await tx
+        .insert(tasks)
+        .values({
+          organizationId,
+          fieldId,
+          title: `${doneActivity.replace("_", " ")} — ${demoField.name} (completed)`,
+          status: "done",
+          activity: doneActivity,
+          progressPct: 100,
+          startsOn: isoDate(addDays(today, -14)),
+          dueOn: isoDate(addDays(today, -1)),
+          waterVolumeM3: doneActivity === "watering" ? "4.5" : null,
+          position: "1",
+        })
+        .returning({ id: tasks.id });
+      await enrichTask(tx, doneRow!.id, seedIndex++);
+    }
+  });
+
+  console.log(`Seeded ${DEMO_FIELDS.length} demo fields, crop cycles and tasks for the org`);
+}
+
+/**
+ * §2.12: 12 months of harvested history across all four seeded crops, on
+ * every field the org currently has — real fields included, not just
+ * `DEMO_FIELDS`. Skips a field that already has any harvested crop cycle,
+ * so re-running this script never duplicates history it already wrote.
+ * Returns the number of fields it actually backfilled.
+ */
+async function backfillHistoricalCropCycles(
+  db: ReturnType<typeof createDbClient>["db"],
+  organizationId: string,
+  farmId: string,
+  cropByName: Map<string, { id: string }>,
+  today: Date,
+): Promise<number> {
+  const orgFields = await db
+    .execute<{ id: string; name: string }>(
+      sql`SELECT id, name FROM fields WHERE organization_id = ${organizationId} AND farm_id = ${farmId} ORDER BY position`,
+    )
+    .then((r) => r.rows);
+
+  let backfilled = 0;
+  await withOrganization(db, organizationId, async (tx) => {
+    for (const [i, field] of orgFields.entries()) {
+      const already = await tx.execute<{ exists: boolean }>(sql`
+        SELECT EXISTS (
+          SELECT 1 FROM crop_cycles WHERE organization_id = ${organizationId} AND field_id = ${field.id} AND status = 'harvested'
+        ) AS exists
+      `);
+      if (already.rows[0]!.exists) {
+        continue;
+      }
+
+      for (const [offsetIndex, harvestOffsetDays] of HISTORICAL_HARVEST_OFFSETS_DAYS.entries()) {
+        const cropName = HISTORICAL_CROPS[(i + offsetIndex) % HISTORICAL_CROPS.length]!;
+        const historicalCrop = cropByName.get(cropName);
+        if (!historicalCrop) {
+          throw new Error(`seed crop '${cropName}' not found — run 'pnpm db:seed' first`);
+        }
+        const harvestedOn = addDays(today, -harvestOffsetDays);
+        const historicalPlantedOn = addDays(harvestedOn, -HISTORICAL_CYCLE_DAYS);
+        await tx.insert(cropCycles).values({
+          organizationId,
+          fieldId: field.id,
+          cropId: historicalCrop.id,
+          plantedOn: isoDate(historicalPlantedOn),
+          expectedHarvestOn: isoDate(harvestedOn),
+          status: "harvested",
+          quantityKg: String(400 + i * 50 + offsetIndex * 30),
+        });
+      }
+      backfilled++;
+    }
+  });
+
+  return backfilled;
 }
 
 main().catch((err) => {
