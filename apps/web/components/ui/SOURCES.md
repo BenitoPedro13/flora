@@ -25,7 +25,29 @@ Fetched 2026-08-15 against AlignUI docs **v1.2** (`alignui.com/docs/v1.2/...`).
 | `components/ui/input.tsx` | [`alignui.com/docs/v1.2/ui/input`](https://alignui.com/docs/v1.2/ui/input) | `c7f8a537b9459c1e5db40ac317b29eba3da945b805f0eeb621c01f447bedb0ae` |
 | `components/ui/label.tsx` | [`alignui.com/docs/v1.2/ui/label`](https://alignui.com/docs/v1.2/ui/label) | `eaaaa8b7e9e503dc99b73f981e4ba42de3c4cddbb721f6cded11be481fdafbab` |
 | `components/ui/hint.tsx` | [`alignui.com/docs/v1.2/ui/hint`](https://alignui.com/docs/v1.2/ui/hint) | `cbf31dd63ee17946126b28537f4391bfa79a73290900b0d8bc85bc3711472e4e` |
+| `components/ui/progress-bar.tsx` | [`alignui.com/docs/v1.2/ui/progress-bar`](https://alignui.com/docs/v1.2/ui/progress-bar) | `31fa2cbc813f67da19b8d320e95fb34c180b628c047ac6e4ec0eaa98258318b7` |
+| `components/ui/kbd.tsx` | [`alignui.com/docs/v1.2/ui/kbd`](https://alignui.com/docs/v1.2/ui/kbd) | `32a5dc8f069387ad89aaecbc0f248f3803d1cbc1a44161756c8ddf573698578c` |
+| `components/ui/select.tsx` | [`alignui.com/docs/v1.2/ui/select`](https://alignui.com/docs/v1.2/ui/select) | `7c7cde16f2377c460e7cd17ead70c9bc53302d3d650b9e0e584b90872adf842c` |
+| `components/ui/modal.tsx` | [`alignui.com/docs/v1.2/ui/modal`](https://alignui.com/docs/v1.2/ui/modal) | `de1a77649bbb1ce6c5242023b705ceac842e1c184b4391dcf24fae82be2de730` |
+| `components/ui/file-upload.tsx` | [`alignui.com/docs/v1.2/ui/file-upload`](https://alignui.com/docs/v1.2/ui/file-upload) | `777ff62a087aaf74999d780eafb32831f4021cdcd5b407c3e8246e0a14030938` |
 | `components/ui/chart.tsx` | [`github.com/shadcn-ui/ui` — `apps/v4/registry/new-york-v4/ui/chart.tsx`](https://github.com/shadcn-ui/ui/blob/main/apps/v4/registry/new-york-v4/ui/chart.tsx) | `974580b8850059ae63cba7c658ed3c3252dce647f04d83ec24cde24335933403` (upstream: `84b423d5fd7e645c3c259d8cde84765dcc4e185450dcb3494a39a20f935bf5c7`) — **bug fix**: `import { cn } from "@/lib/utils"` → `import { cn } from "@/utils/cn"` (this repo's alias, per `components.json`) |
+
+## `progress-bar`, `kbd`, `select`, `modal`, `file-upload` (TASK-fields)
+
+Fetched 2026-08-15 the same way as every row above — but the docs site (rebuilt since the shell
+task) no longer renders a plain "view source" HTML block; the component source is embedded as a
+Next.js RSC flight payload (`self.__next_f.push(...)`), doubly JSON-string-escaped for `kbd`,
+`modal` and `file-upload` (a `code`-prop string nested inside the outer flight string) and
+singly-escaped for `select` (embedded as page markup text, not a nested prop). Extracted with a
+throwaway script: concatenate the flight chunks, locate each component's `// AlignUI <Name>
+v0.0.0` header, decode however many JSON layers are present, and cut at that component's own
+trailing `export { ... };` — never at the next header, which several pages (`select` in
+particular) follow with unrelated demo/usage code in the same flight chunk. `sha256sum` above is
+the byte-for-byte proof that no stray demo code or escaping artifact rode along.
+
+`file-upload`'s docs page also renders `FileFormatIcon` as a demo dependency (same pattern as
+`avatar-empty-icons.tsx`), but nothing in this task's `ImportCard` (§2.9 — a GeoJSON file has one
+format, not several) needs a per-format icon, so it was left unvendored.
 
 ## Why `chart.tsx` came from GitHub, not `shadcn add chart`
 

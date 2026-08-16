@@ -22,19 +22,23 @@ Field Management follow. **Energy (`3:5920`) and Carbon Offset (`3:6566`) are de
 Energy sits off that loop and has no data source (architecture §4.3). Do not build against
 either without re-opening the decision.
 
-**Status (2026-08-15):** `TASK-foundations` (monorepo, infra, Drizzle+PostGIS skeleton),
+**Status (2026-08-16):** `TASK-foundations` (monorepo, infra, Drizzle+PostGIS skeleton),
 `TASK-auth-tenancy` (identity, sessions, RLS enforced twice), `TASK-design-system-shell`
 (AlignUI token chain, vendored base components, `AppSidebar`/`PageHeader`, the `(app)`/`(auth)`
-route groups, Playwright shell tests), and `TASK-domain-schema` (the ten domain tables — farms,
+route groups, Playwright shell tests), `TASK-domain-schema` (the ten domain tables — farms,
 crops, fields, crop_cycles, observations, stress_zones, tasks + its three children — composite
-foreign keys, RLS, the `fields` geometry read/write pattern, seeds) have all landed. Phase 0 is
-**complete**. Email+password login with cookie sessions works end to end in a real browser,
-styled with AlignUI tokens; every tenant table — all fourteen of them now — is protected by the
-catalog test in `packages/db/src/queries/tenancy.spec.ts`. `/` still renders the one-line
-session sentence — inside the finished shell; no screen has been built yet. Next: the build
-spine, `TASK-fields` → `TASK-crop-stress` → `TASK-tasks-board`. The retired prototype was
-deleted by `TASK-foundations` after tagging `prototype-v0`; `geo_spike`, the schema spike that
-proved the PostGIS/Drizzle round-trip, was retired by `TASK-domain-schema` once `fields` landed.
+foreign keys, RLS, the `fields` geometry read/write pattern, seeds), and `TASK-fields` (Fields &
+Crops — `1:35172`, the first spine screen: field CRUD, boundary drawing, crop cycles, the map,
+GeoJSON import) have all landed. Phase 0 is **complete** and Phase 1's first screen is live.
+Email+password login with cookie sessions works end to end in a real browser, styled with
+AlignUI tokens; every tenant table is protected by the catalog test in
+`packages/db/src/queries/tenancy.spec.ts`. `/fields` renders the four demo field cards
+(pixel-matched against the Figma), the Mapbox satellite map, the field editor, and GeoJSON
+import — all exercised live in a browser and by `apps/web/e2e/fields.spec.ts`. `/` still renders
+the one-line session sentence. Next: `TASK-crop-stress` → `TASK-tasks-board`. The retired
+prototype was deleted by `TASK-foundations` after tagging `prototype-v0`; `geo_spike`, the
+schema spike that proved the PostGIS/Drizzle round-trip, was retired by `TASK-domain-schema`
+once `fields` landed.
 
 **Corrected 2026-08-15 (`TASK-design-system-shell`):** design-spec §3.2 called the neutral
 colour "Gray" — it's **Slate**. AlignUI's Gray primitive is fully achromatic; the Figma's
@@ -47,10 +51,6 @@ ramp. If a future task re-runs the AlignUI CLI from scratch, pick **Slate**, not
 design-spec §6.2 has the mapping. `AppSidebar` and `PageHeader` (`components/flora/`) carry the
 real work and are built — 11 base components + `chart.tsx` are vendored in `components/ui/`
 with sources tracked in `components/ui/SOURCES.md`.
-
-Next up: the build spine per architecture §16 — `TASK-fields`, then `TASK-crop-stress`, then
-`TASK-tasks-board`. `TASK-fields` is unblocked: the domain schema, `packages/db/src/queries/fields.ts`,
-and `packages/contracts`'s enums/units are all in place.
 
 ### Why the stack changed
 
@@ -113,8 +113,10 @@ project's own docs before installing (§2.0).
 6. **Tenancy is enforced twice** — a repository filter *and* Postgres RLS (architecture §10).
    One missed `where` must not become a cross-tenant leak.
 7. **No raw hex in components.** Colours come from AlignUI token classes; the only files
-   holding colour values are `app/globals.css` and `components/charts/config.ts`
-   (design-spec §10).
+   holding colour values are `app/globals.css`, `components/charts/config.ts`, and
+   `components/map/config.ts` (design-spec §10). The last exists because Mapbox GL's paint
+   properties are JSON values, not CSS classes, and its style parser does not resolve
+   `var(--color-*)` — `TASK-fields` §3.4.
 8. **`components/ui/` is vendored.** AlignUI base components and shadcn's `chart.tsx` stay
    byte-identical to their sources. Restyle through tokens, never by editing them. Product
    composites live in `components/flora/`.

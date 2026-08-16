@@ -574,12 +574,20 @@ GET    /api/v1/me
 GET    /api/v1/farms
 GET    /api/v1/farms/:id/dashboard              → farm_daily_rollups payload (Home)
 
-GET    /api/v1/fields                           ?farmId=&q=&sort=&cursor=
-POST   /api/v1/fields                           body: GeoJSON MultiPolygon
+GET    /api/v1/crops
+POST   /api/v1/crops                            the field editor's inline "add species"
+
+GET    /api/v1/fields                           ?farmId=&q=&cropId=&sort=&cursor=&limit=
+GET    /api/v1/fields/geojson                   ?farmId=&bbox=  → FeatureCollection (the map's own feed, TASK-fields §3.1)
+POST   /api/v1/fields                           body: GeoJSON MultiPolygon (+ optional cropCycle)
 GET    /api/v1/fields/:id
 PATCH  /api/v1/fields/:id
 DELETE /api/v1/fields/:id
-POST   /api/v1/fields/import                    multipart: GeoJSON/KML/zipped Shapefile
+POST   /api/v1/fields/import/preview            body: GeoJSON FeatureCollection → per-row verdicts, writes nothing
+POST   /api/v1/fields/import/commit             body: { farmId, rows } → { created }
+
+POST   /api/v1/fields/:id/crop-cycles           201 | 409 (one growing cycle per field)
+PATCH  /api/v1/crop-cycles/:id
 
 GET    /api/v1/fields/:id/observations          ?index=&from=&to=
 GET    /api/v1/fields/:id/observations/dates    → the Crop Stress date picker
@@ -605,6 +613,12 @@ POST   /api/v1/energy/readings                  ingest (§11.4)
 
 There is no tile endpoint. Rasters are R2 URLs returned inline on the observation
 (§7.3).
+
+`TASK-fields` (Phase 1) shipped the farms/crops/fields/crop-cycles/import routes above — GeoJSON
+import only, preview-then-commit (§11.5). KML and zipped Shapefile import are not yet routes;
+`TASK-fields-import` adds them behind the same preview-then-commit shape once §11.5's parser
+`[VERIFY]` is resolved. Everything else in this block (observations, stress-zones,
+management-zones, prescriptions, tasks, weather, energy) is still Phase 2+, not yet built.
 
 ---
 
@@ -793,8 +807,16 @@ The answer materially changes the ingestion design.]`
 
 GeoJSON, KML, and zipped Shapefile. `[VERIFY: a maintained TypeScript Shapefile parser —
 this is where the Python ecosystem was genuinely stronger (fiona/pyogrio) and the JS options
-need checking before committing to the format list.]` Import runs as a job with a
-preview-then-commit step; silently importing 400 misprojected polygons is worse than failing.
+need checking before committing to the format list.]` Silently importing 400 misprojected
+polygons is worse than failing, so every format goes through the same preview-then-commit step.
+
+**GeoJSON shipped in `TASK-fields`** (Phase 1): needs no parser (`JSON.parse` plus the zod
+schema `packages/contracts` already owns), so it runs synchronously in the request —
+`POST /fields/import/preview` returns per-row valid/invalid verdicts and writes nothing;
+`POST /fields/import/commit` writes only the accepted rows. KML and zipped Shapefile still need
+this section's `[VERIFY]` resolved, and once it is, "runs as a job" applies to those two only —
+`TASK-fields-import` moves commit onto BullMQ (Phase 2) if a parser is expensive enough to
+justify it.
 
 ---
 
@@ -893,7 +915,7 @@ everything else is sequenced by how directly it serves them.
 | Phase | Deliverable | Screens |
 |---|---|---|
 | **0 — Foundations** | Monorepo, Turbo, compose, Drizzle + PostGIS customType, Next + NestJS scaffolds, contracts, auth + tenancy + RLS, AlignUI install, **PRO blocks rebuilt from base components** (design-spec §6.2), app shell, domain schema (farms/crops/fields/crop_cycles/observations/stress_zones/tasks + children, composite FKs, RLS) — **landed 2026-08-15** (`TASK-foundations`, `TASK-auth-tenancy`, `TASK-design-system-shell`, `TASK-domain-schema`) — **complete** | shell |
-| **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, import, crop cycles, growth/species/quantity, Mapbox list + map | `1:35172` |
+| **1 — Fields & Crops** | Field CRUD, PostGIS boundaries, GeoJSON import, crop cycles, growth/species/quantity, Mapbox list + map — **landed 2026-08-16** (`TASK-fields`) — **complete** (KML/Shapefile import still open, `TASK-fields-import`) | `1:35172` |
 | **2 — Crop Stress** | `packages/satellite`, BullMQ + schedules, R2, GeoTIFF → stats + PNG + stress zones, detection review UI | `18:6567` |
 | **3 — Tasks** | Task domain scoped to fields, board with drag, list, timeline, watering volumes (§4.4) | `24:11420` |
 | **4 — Home** | Rollups, scoring, re-sourced KPI row (§4.4), all Home widgets | `1:12913` |
@@ -925,7 +947,7 @@ computes yet (§17 Q4).
 | ~~Q7~~ | ~~Mobile~~ — **RESOLVED 2026-08-15: desktop-only in v1, built to retrofit cheaply.** See §9.6. | — |
 | Q8 | Who computes nitrogen prescriptions (§4.1) | Phase 6 |
 | Q9 | What sends transactional email? Password reset and invitations both need a provider; neither is in scope for `TASK-auth-tenancy` (§10) and none has been chosen. | First task needing either |
-| ~~Q10~~ | ~~`crop_cycles.growth_pct` — stored or derived?~~ — **RESOLVED 2026-08-15: derived**, computed from `planted_on`/`expected_harvest_on` in `packages/db/src/queries/`, not a column — the same reasoning that keeps `area` out of `fields` (§5.3). Revisit only if growth is meant as an operator-observed stage rather than calendar progress. | — |
+| ~~Q10~~ | ~~`crop_cycles.growth_pct` — stored or derived?~~ — **RESOLVED 2026-08-15: derived**, computed from `planted_on`/`expected_harvest_on`, not a column — the same reasoning that keeps `area` out of `fields` (§5.3). **Implemented `TASK-fields` §2.3**: `GROWTH_PCT_SQL` in `packages/db/src/queries/fields.ts`, against the farm's local date (`AT TIME ZONE farms.timezone`, §3.2 of that task doc), clamped `[0, 100]`. Revisit only if growth is meant as an operator-observed stage rather than calendar progress. | — |
 | — | ~~What produces energy readings~~ — moot while Energy is deferred (§4.3) | deferred |
 
 ---

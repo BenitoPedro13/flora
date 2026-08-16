@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { getSidebarCollapsed } from "@/lib/sidebar-state";
+import { QueryProvider } from "@/lib/query-client";
 import { AppSidebar } from "@/components/flora/app-sidebar";
 
 /**
@@ -18,11 +19,11 @@ export default async function AppLayout({ children }: LayoutProps<"/">) {
   const collapsed = await getSidebarCollapsed();
 
   return (
-    <div className="flex h-screen w-full">
-      <AppSidebar session={session} defaultCollapsed={collapsed} />
-      <div className="flex min-w-0 flex-1 justify-center">
-        <div className="w-full max-w-[1110px] px-8">{children}</div>
+    <QueryProvider>
+      <div className="flex h-screen w-full">
+        <AppSidebar session={session} defaultCollapsed={collapsed} />
+        <main className="flex min-w-0 flex-1 flex-col overflow-hidden">{children}</main>
       </div>
-    </div>
+    </QueryProvider>
   );
 }

@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
+import { PageContainer } from "@/components/flora/page-container";
 
 /**
  * The session gate (TASK-auth-tenancy §2.8): `proxy.ts` only checks cookie
@@ -16,10 +17,10 @@ export default async function HomePage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-4 p-8">
+    <PageContainer className="flex flex-1 flex-col gap-4 py-8">
       <p>
         Logged in as {session.user.email} — {session.organization.name} ({session.role})
       </p>
-    </div>
+    </PageContainer>
   );
 }

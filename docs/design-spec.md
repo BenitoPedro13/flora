@@ -198,11 +198,19 @@ The Crops Stocked donut uses `950 / 800 / 600 / 300` for Corn / Wheat / Soy / Ri
 
 | Activity | Text | Fill |
 |---|---|---|
-| Watering | sky `#47c2ff` | `#ebf8ff` |
-| Planting | green `#1daf61` | `#e0faec` |
-| Fertilization | yellow `#f6b51e` | `#ffecc0` |
-| Pest Control | pink | pink lighter `[VERIFY: exact pink tokens — not present in the 1:12913 variable set; read from 24:11420]` |
-| Harvesting | orange | orange lighter `[VERIFY: same]` |
+| Watering | sky (`verified-base`) `#47c2ff` | `#ebf8ff` |
+| Planting | green (`success-base`) `#1fc16b` | `#e0faec` |
+| Fertilization | yellow (`away-base`) `#f6b51e` | `#fffaeb` |
+| Pest Control | pink (`highlighted-base`) `#fb4ba3` | `#ffebf4` |
+| Harvesting | orange (`warning-base`), token unconfirmed | lighter, token unconfirmed `[VERIFY: never appears on a card in 1:35172; read from 24:11420 when Tasks ships]` |
+
+**Corrected 2026-08-16 (`TASK-fields` §2.12), against real card data (`get_design_context` on
+`2158:18884`/`19459`/`19362`/`19539`):** Planting's text is `success-base` (`#1fc16b`,
+green-500), not `#1daf61` (green-600/`primary-base`) as this table previously said; Fertilization's
+fill is `away-lighter` (`#fffaeb`), not `#ffecc0`. Pest Control's tokens, previously an open
+`[VERIFY]`, are confirmed `highlighted-base`/`highlighted-lighter`. Harvesting still never
+appears on a fetched card — its row stays a best-effort match to `warning`, open until Tasks
+(`24:11420`) ships a real one.
 
 ### 3.4 Typography
 
@@ -386,10 +394,19 @@ labels above `Label/Medium` values · a footer with the centroid `4.5831° S / 5
 `Paragraph/X Small` and a primary **View Details** button. Selected card = green border.
 
 Map: a stylised isometric plot render with floating field labels.
-`[VERIFY: the isometric view is almost certainly an illustration, not a renderable map style.
-Confirm whether the list map should be a normal top-down satellite map with the same label
-pills — which is what Mapbox GL delivers. Mapbox's pitched camera (`pitch: 55`) gets
-partway to the isometric feel if that treatment matters.]`
+**Resolved 2026-08-16 (`TASK-fields` §1.1): the isometric render is an illustration, not a
+renderable map style.** Built as a top-down Mapbox satellite basemap (`satellite-streets-v12`,
+`pitch: 0`) carrying white field boundaries (`success-base` green when selected — confirmed
+against `2158:19362`, Field 239's selected card, not `primary-base`) and label pills rendered as
+a `symbol` layer with `text-halo-width` standing in for a real pill background
+(`components/map/field-label-layer.tsx`). Consequence for NFR-10 (design-spec §10 item 1): the
+map region has no Figma-comparable render and is excluded from the panel's visual diff — see
+`TASK-fields.md` §6 item 14.
+
+Card data (`get_design_context` on `2158:18884`/`19459`/`19362`/`19539`) shows all four cards
+with `Corn` / `1.9 T`, and confirms Pest Control's colour as `state/highlighted`
+(`#fb4ba3`/`#ffebf4`) — resolving §3.3's `[VERIFY]` for that row; Harvesting never appears on a
+fetched card, so §3.3's `[VERIFY]` for it stays open.
 
 ### 5.3 Fields — Crop Stress — `18:6567`
 
@@ -629,8 +646,11 @@ not extractions:
 | D9 | `fancy/primary/default` still blue in Figma (§2.3). |
 | D10 | "Rain Chanse" typo (§5.6); "Pendent Tasks" should be "Pending Tasks"; "Specie Planted" should be "Species Planted"; "Energy Fonts" is likely a mistranslation of "Energy Sources" (*fontes*, PT). |
 | D13 | **No auth screens exist.** Login, forgot-password, and invite-acceptance are all undesigned — the screen inventory (§2) has none. `TASK-auth-tenancy` shipped a functional, unstyled login page (Tailwind only, no AlignUI) to prove the cookie flow. `TASK-design-system-shell` (2026-08-15) restyled it to AlignUI tokens (`Input`/`Label`/`Hint`/`Button` inside a `Card`) — same flow, same fetch, still not a *designed* screen. This gap closes only once login/forgot-password/invite-acceptance get real artboards. |
-| D15 | **The field card's `Soil Moisture` and `Carbon Ton Potential` metrics have no data source anywhere in the architecture** (`TASK-domain-schema`, 2026-08-15). Soil moisture is plausibly Open-Meteo's soil-moisture parameters at the field centroid (Phase 5) or an NDWI observation (Phase 2); carbon-ton potential has no candidate at all and may be a leftover of the carbon-credit template (§2.2 / architecture §4.3) already identified. Two of the field card's four metrics can't be filled without a decision here — blocks the full field card in `TASK-fields`. |
-| D14 | **Does Fields default to the collapsed sidebar rail?** §4.3's `[VERIFY]` resolved collapse to a user toggle, not a route constraint — `AppSidebar` takes a plain `collapsed` prop. The three Fields screens showing it collapsed reads as a *default*, not a rule the component enforces. If the designer confirms Fields should default collapsed on first visit, it's a one-line `defaultCollapsed` prop on `TASK-fields`'s layout, not a rework. |
+| D15 | **The field card's `Soil Moisture` and `Carbon Ton Potential` metrics have no data source anywhere in the architecture** (`TASK-domain-schema`, 2026-08-15). Soil moisture is plausibly Open-Meteo's soil-moisture parameters at the field centroid (Phase 5) or an NDWI observation (Phase 2); carbon-ton potential has no candidate at all and may be a leftover of the carbon-credit template (§2.2 / architecture §4.3) already identified. **Layout resolved 2026-08-16 (`TASK-fields` §1.1, §3.3), the data question stays open:** the card keeps all four metric slots (removing two would change the designed proportions) and renders `—` with a `title="No data source yet"` in the two unsourced ones — `components/flora/field-card.tsx`. Nothing invented, nothing silently dropped. This gap closes only once a real data source is decided for one or both. |
+| D14 | ~~Does Fields default to the collapsed sidebar rail?~~ — **RESOLVED 2026-08-16 (`TASK-fields` §1.1): no.** No route override was added — `AppSidebar`'s `collapsed` stays a plain user toggle persisted in the `flora_sidebar` cookie, unchanged from `TASK-design-system-shell`. The three Fields artboards showing it collapsed was the designer's framing, not a rule; `apps/web/e2e/fields.spec.ts` runs against whatever the toggle's current state is, not a forced default. Revisit only if a real designer confirms collapsed-by-default is wanted. |
+| D16 | **The field editor (Add/Edit Field) has no artboard.** Name, boundary drawing, species (with inline "add species"), planted/expected-harvest dates, status, quantity, and delete-confirmation are all undesigned. Built 2026-08-16 (`TASK-fields` §2.8) from AlignUI primitives (`Input`, `Select`, `Modal`, `Label`, `Hint`) and the §4.5 card anatomy — `components/flora/field-editor.tsx`. |
+| D17 | **Sort and Filter have no menus.** `1:35172` shows the collapsed toolbar controls only, no open state. Built 2026-08-16 (`TASK-fields` §2.7) as compact `Select` triggers — `Name A–Z` / `Name Z–A` / `Newest` / `Manual` for sort, crop species for filter — `apps/web/app/(app)/fields/fields-toolbar.tsx`. |
+| D18 | **No import flow is designed.** `File Upload Cards [1.0]` exists as a PRO block reference (§6.2) but the preview table and its per-row verdicts are not drawn. Built 2026-08-16 (`TASK-fields` §2.9) as `ImportCard` — `components/flora/import-card.tsx` — GeoJSON only; KML/Shapefile wait on architecture §11.5's parser `[VERIFY]`. |
 
 ---
 
@@ -640,7 +660,10 @@ A screen is done when:
 
 1. It renders at 1440×900 within **2% pixel delta** of its Figma export (architecture NFR-9).
 2. Every colour comes from an AlignUI token class — a review greps the diff for raw hex and
-   finds none outside `globals.css` and the chart config module.
+   finds none outside `globals.css`, the chart config module, and `components/map/config.ts`
+   (added by `TASK-fields` §3.4: Mapbox paint properties can't take a CSS class or resolve
+   `var(--color-*)`, so its literal colours are the token values, converted from `oklch()` by
+   hand and checked against the Figma render).
 3. Every icon is a `@remixicon/react` import matching the Figma layer name.
 4. Every AlignUI base component in `components/ui/` is byte-identical to the docs source
    except for documented bug fixes.
