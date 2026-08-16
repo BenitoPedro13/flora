@@ -1,8 +1,10 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { scalarIndexValues } from "@flora/contracts";
+import { createTar } from "nanotar";
 import { describe, expect, it, vi } from "vitest";
 import { RateLimitedError, SatelliteError } from "../errors.js";
-import { fetchIndexRaster } from "./process.js";
+import { fetchAllIndexRasters, fetchIndexRaster, fetchTrueColorRaster } from "./process.js";
 
 const BOUNDARY = {
   type: "MultiPolygon" as const,
@@ -112,5 +114,91 @@ describe("fetchIndexRaster", () => {
     expect(caught).toBeInstanceOf(SatelliteError);
     expect((caught as Error).message).toContain("index.tif");
     expect((caught as Error).message).not.toContain("Content-Type was not one of");
+  });
+});
+
+describe("fetchAllIndexRasters", () => {
+  /**
+   * No live 11-output fixture is committed — the B/C run in
+   * `TASK-spectral-indices` §1.3 was made live during planning but not
+   * captured to a file. Hand-built here (not from CDSE), same precedent as
+   * `process.spec.ts`'s own "missing member" case above.
+   */
+  it("requests every scalar index plus scl in one call, and parses all of them back by name", async () => {
+    const members = [
+      ...scalarIndexValues.map((index) => ({ name: `${index}.tif`, data: new Uint8Array([1, 2, 3]) })),
+      { name: "scl.tif", data: new Uint8Array([4, 5, 6]) },
+    ];
+    const tar = createTar(members);
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response(tar, { status: 200, headers: { "Content-Type": "application/x-tar" } }),
+    );
+
+    const result = await fetchAllIndexRasters(
+      "tok",
+      { boundary: BOUNDARY, sceneDate: "2026-08-14", indices: scalarIndexValues, widthPx: 512, heightPx: 512 },
+      fetchImpl,
+    );
+
+    expect(result.indexGeotiffs.size).toBe(scalarIndexValues.length);
+    for (const index of scalarIndexValues) {
+      expect(result.indexGeotiffs.get(index)).toBeDefined();
+    }
+    expect(result.sclGeotiff.byteLength).toBe(3);
+
+    const [, init] = fetchImpl.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string) as {
+      output: { responses: Array<{ identifier: string }> };
+      evalscript: string;
+    };
+    expect(body.output.responses.map((r) => r.identifier)).toEqual([...scalarIndexValues, "scl"]);
+    expect(body.evalscript).toContain('input: [{ bands: ["B02","B03","B04","B05","B08","B11","SCL"] }]');
+  });
+
+  it("throws naming the missing member when a requested index isn't in the TAR", async () => {
+    const tar = createTar([
+      { name: "ndvi.tif", data: new Uint8Array([1]) },
+      { name: "scl.tif", data: new Uint8Array([2]) },
+    ]);
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response(tar, { status: 200, headers: { "Content-Type": "application/x-tar" } }),
+    );
+
+    await expect(
+      fetchAllIndexRasters(
+        "tok",
+        { boundary: BOUNDARY, sceneDate: "2026-08-14", indices: ["ndvi", "ndre"], widthPx: 512, heightPx: 512 },
+        fetchImpl,
+      ),
+    ).rejects.toThrow(/ndre\.tif/);
+  });
+});
+
+describe("fetchTrueColorRaster — the on-demand path (§2.5, built as a same-day follow-on)", () => {
+  it("requests both 'true_color' and 'scl', and returns both", async () => {
+    // scl is requested even for true-colour — found live: the RGB formula has no division, so it
+    // can't fall back on 0/0 = NaN to signal "outside the clip geometry" the way every scalar
+    // index does (raster.ts's decodeGeoTiff doc comment has the full story).
+    const tar = createTar([
+      { name: "true_color.tif", data: new Uint8Array([9, 9, 9]) },
+      { name: "scl.tif", data: new Uint8Array([7, 7]) },
+    ]);
+    const fetchImpl = vi.fn<typeof fetch>(
+      async () => new Response(tar, { status: 200, headers: { "Content-Type": "application/x-tar" } }),
+    );
+
+    const result = await fetchTrueColorRaster(
+      "tok",
+      { boundary: BOUNDARY, sceneDate: "2026-08-14", widthPx: 512, heightPx: 512 },
+      fetchImpl,
+    );
+
+    expect(result.rgbGeotiff.byteLength).toBe(3);
+    expect(result.sclGeotiff.byteLength).toBe(2);
+    const [, init] = fetchImpl.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string) as {
+      output: { responses: Array<{ identifier: string }> };
+    };
+    expect(body.output.responses.map((r) => r.identifier)).toEqual(["true_color", "scl"]);
   });
 });

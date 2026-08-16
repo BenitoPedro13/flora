@@ -6,6 +6,7 @@ import { startTestInfra, type TestInfra } from "../test/containers.js";
 import { withOrganization } from "../tenancy.js";
 import { insertField } from "./fields.js";
 import {
+  allObservationsExist,
   getFieldBoundaryForRefresh,
   listObservationDates,
   listObservations,
@@ -97,6 +98,26 @@ describe("observations queries", () => {
     await withOrganization(owner.db, orgId, async (tx) => {
       expect(await observationExists(tx, orgId, fieldId, "2026-08-01", "ndvi")).toBe(true);
       expect(await observationExists(tx, orgId, fieldId, "2026-08-02", "ndvi")).toBe(false);
+    });
+  });
+
+  it("allObservationsExist is true only once every requested index has a row (found live: a lone pre-existing NDVI row must not block backfilling the rest)", async () => {
+    await withOrganization(owner.db, orgId, async (tx) => {
+      // Only 'ndvi' exists for this date (from the test above) — 'ndre' does not.
+      expect(await allObservationsExist(tx, orgId, fieldId, "2026-08-01", ["ndvi"])).toBe(true);
+      expect(await allObservationsExist(tx, orgId, fieldId, "2026-08-01", ["ndvi", "ndre"])).toBe(false);
+
+      await upsertObservation(tx, {
+        organizationId: orgId,
+        fieldId,
+        capturedOn: "2026-08-01",
+        index: "ndre",
+        stats: STATS,
+        rasterKey: `rasters/${orgId}/${fieldId}/ndre/2026-08-01.png`,
+        bbox: [-59.134, -4.585, -59.132, -4.583],
+        sceneId: "scene-1",
+      });
+      expect(await allObservationsExist(tx, orgId, fieldId, "2026-08-01", ["ndvi", "ndre"])).toBe(true);
     });
   });
 

@@ -1,5 +1,15 @@
 import type { BBox } from "@flora/contracts";
-import type { FetchIndexRasterInput, FetchIndexRasterResult, FindLatestSceneInput, Scene, SatelliteProvider } from "./provider.js";
+import type {
+  FetchAllIndexRastersInput,
+  FetchAllIndexRastersResult,
+  FetchIndexRasterInput,
+  FetchIndexRasterResult,
+  FetchTrueColorRasterInput,
+  FetchTrueColorRasterResult,
+  FindLatestSceneInput,
+  Scene,
+  SatelliteProvider,
+} from "./provider.js";
 
 /**
  * Replays a supplied fixture instead of calling CDSE — what makes the
@@ -14,6 +24,14 @@ import type { FetchIndexRasterInput, FetchIndexRasterResult, FindLatestSceneInpu
  * GeoTIFF pair, the same pattern `packages/raster/src/golden.spec.ts` uses).
  * The shape is unchanged either way: whoever captures a real fixture later
  * just constructs this same `FixtureData` from the recorded bytes.
+ *
+ * `fetchAllIndexRasters` (`TASK-spectral-indices` §2.1) replays the same
+ * `indexGeotiff` for every requested index rather than ten distinct ones —
+ * a real fixture would carry one GeoTIFF per index, but this provider has no
+ * caller in this codebase that reaches that method yet
+ * (`packages/db/src/seed-satellite.ts` calls the raster pipeline directly,
+ * not through `SatelliteProvider` — §2 note on why the seed script is
+ * unaffected by this task).
  */
 export interface FixtureData {
   scene: Scene | null;
@@ -35,5 +53,14 @@ export class FixtureSatelliteProvider implements SatelliteProvider {
       sclGeotiff: this.fixture.sclGeotiff,
       bbox: this.fixture.bbox,
     };
+  }
+
+  async fetchAllIndexRasters(input: FetchAllIndexRastersInput): Promise<FetchAllIndexRastersResult> {
+    const indexGeotiffs = new Map(input.indices.map((index) => [index, this.fixture.indexGeotiff]));
+    return { indexGeotiffs, sclGeotiff: this.fixture.sclGeotiff, bbox: this.fixture.bbox };
+  }
+
+  async fetchTrueColorRaster(_input: FetchTrueColorRasterInput): Promise<FetchTrueColorRasterResult> {
+    return { rgbGeotiff: this.fixture.indexGeotiff, sclGeotiff: this.fixture.sclGeotiff, bbox: this.fixture.bbox };
   }
 }

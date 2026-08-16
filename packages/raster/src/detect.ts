@@ -3,17 +3,19 @@ import type { BBox, Polygon, StressSeverity } from "@flora/contracts";
 import { area as turfArea, featureCollection, intersect, polygon as turfPolygon, union } from "@turf/turf";
 import type { Feature, MultiPolygon as GeoMultiPolygon, Polygon as GeoPolygon } from "geojson";
 import { floorFilteredSortedValues, percentile, type DecodedRaster } from "./raster.js";
+import { NON_VEGETATION_FLOOR } from "./vegetation-floor.js";
 import { contourMask, lonLatToPixel, meanValueInPolygon, pixelPolygonToGeoJSON, type PixelPolygon } from "./vectorise.js";
 
 /**
  * Architecture §7.5's rules, implemented verbatim (TASK-satellite-pipeline
  * §2.9). `DETECTOR_VERSION` bumps on any threshold change, so a change to a
  * number shows up in review as a version bump rather than a silently edited
- * literal.
+ * literal. Stress detection is NDVI-only (`TASK-spectral-indices` §2.4) —
+ * every call here always omits `index` from `floorFilteredSortedValues`,
+ * which defaults to NDVI's own floor behaviour.
  */
 export const DETECTOR_VERSION = "v1";
 
-const NON_VEGETATION_FLOOR = 0.1;
 const MIN_ZONE_M2 = 0.5 * SQUARE_METRES_PER_ACRE;
 const MAX_ZONE_M2 = 4 * SQUARE_METRES_PER_ACRE;
 

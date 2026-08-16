@@ -1,4 +1,4 @@
-import type { BBox, MultiPolygon, ObservationIndex } from "@flora/contracts";
+import type { BBox, MultiPolygon, ScalarIndex } from "@flora/contracts";
 
 /**
  * The interface architecture §3 says survived the prototype (`packages/satellite`
@@ -25,7 +25,7 @@ export interface FetchIndexRasterInput {
   boundary: MultiPolygon;
   sceneId: string;
   sceneDate: string;
-  index: ObservationIndex;
+  index: ScalarIndex;
   widthPx: number;
   heightPx: number;
 }
@@ -45,7 +45,55 @@ export interface FetchIndexRasterResult {
   bbox: BBox;
 }
 
+export interface FetchAllIndexRastersInput {
+  boundary: MultiPolygon;
+  sceneId: string;
+  sceneDate: string;
+  indices: readonly ScalarIndex[];
+  widthPx: number;
+  heightPx: number;
+}
+
+/**
+ * Every requested scalar index from one Process API call, one PU charge
+ * (`TASK-spectral-indices` §1.3, §2.1) — the daily-refresh path. Keyed by
+ * index rather than positional, matching `cdse/process.ts`'s TAR-by-name
+ * extraction.
+ */
+export interface FetchAllIndexRastersResult {
+  indexGeotiffs: Map<ScalarIndex, ArrayBuffer>;
+  sclGeotiff: ArrayBuffer;
+  bbox: BBox;
+}
+
+export interface FetchTrueColorRasterInput {
+  boundary: MultiPolygon;
+  sceneId: string;
+  sceneDate: string;
+  widthPx: number;
+  heightPx: number;
+}
+
+/**
+ * A 3-band RGB GeoTIFF plus `scl` — no stats, no detection (§2.4/§2.5's
+ * follow-on: true-colour has neither), but `scl` is still requested: the
+ * RGB formula has no division, so it can't fall back on `0/0 = NaN` to
+ * signal "outside the clip geometry" the way every scalar index does
+ * (found live the same day this path shipped — `raster.ts`'s
+ * `decodeGeoTiff` doc comment has the full story).
+ */
+export interface FetchTrueColorRasterResult {
+  rgbGeotiff: ArrayBuffer;
+  sclGeotiff: ArrayBuffer;
+  bbox: BBox;
+}
+
 export interface SatelliteProvider {
   findLatestScene(input: FindLatestSceneInput): Promise<Scene | null>;
+  /** The on-demand "just this one scalar index" path (§2.1). */
   fetchIndexRaster(input: FetchIndexRasterInput): Promise<FetchIndexRasterResult>;
+  /** The daily-refresh path — every scalar index in one call (§2.1, §7 decision 6). */
+  fetchAllIndexRasters(input: FetchAllIndexRastersInput): Promise<FetchAllIndexRastersResult>;
+  /** True-colour's only path — on-demand, never scheduled (§2.5). */
+  fetchTrueColorRaster(input: FetchTrueColorRasterInput): Promise<FetchTrueColorRasterResult>;
 }

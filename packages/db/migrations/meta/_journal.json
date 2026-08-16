@@ -36,6 +36,13 @@
       "when": 1786897316457,
       "tag": "0009_rollups",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1786907698664,
+      "tag": "0011_index_enum",
+      "breakpoints": true
     }
   ]
 }

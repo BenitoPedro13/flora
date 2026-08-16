@@ -65,6 +65,33 @@ export async function observationExists(
   return rows.rows[0]!.exists;
 }
 
+/**
+ * The daily-refresh skip check, widened from a single-index existence check
+ * (`TASK-spectral-indices` follow-on, found live): a field with an NDVI row
+ * from before this task's ten-index bulk call — or from any interrupted
+ * partial refresh — must not silently block the other nine from ever
+ * backfilling for that same scene date. True only when *every* one of
+ * `indices` already has a row.
+ */
+export async function allObservationsExist(
+  tx: Tx,
+  organizationId: string,
+  fieldId: string,
+  capturedOn: string,
+  indices: readonly ObservationIndex[],
+): Promise<boolean> {
+  const indexList = sql.join(
+    indices.map((index) => sql`${index}`),
+    sql`, `,
+  );
+  const rows = await tx.execute<{ count: string }>(sql`
+    SELECT count(*) AS count FROM observations
+    WHERE organization_id = ${organizationId} AND field_id = ${fieldId}
+      AND captured_on = ${capturedOn} AND index IN (${indexList})
+  `);
+  return Number(rows.rows[0]!.count) === indices.length;
+}
+
 export interface ObservationRecord {
   fieldId: string;
   capturedOn: string;

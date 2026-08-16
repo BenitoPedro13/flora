@@ -11,7 +11,33 @@ export const cropCycleStatusValues = ["planned", "growing", "harvested", "failed
 export const cropCycleStatusSchema = z.enum(cropCycleStatusValues);
 export type CropCycleStatus = z.infer<typeof cropCycleStatusSchema>;
 
-export const observationIndexValues = ["ndvi", "ndre", "ndwi", "evi", "true_color"] as const;
+/**
+ * `TASK-spectral-indices` §2.2: two overlapping vocabularies, not one. Every
+ * `scalarIndexValues` member has a threshold-able number and gets stats,
+ * ramp, detection eligibility. `true_color` is a renderable layer with none
+ * of that — a 3-band RGB composite, no scalar, no legend — so it's added
+ * only to the wider set. Both are still one Postgres enum
+ * (`observation_index`, `packages/db/src/schema/observation.ts`): the
+ * `(field_id, captured_on, index)` grain doesn't care which subset a value
+ * came from, only the application layer does.
+ */
+export const scalarIndexValues = [
+  "ndvi",
+  "ndre",
+  "ndwi",
+  "evi",
+  "ndmi",
+  "msavi",
+  "reci",
+  "mcari",
+  "pri_proxy",
+  "vsdi",
+] as const;
+export const scalarIndexSchema = z.enum(scalarIndexValues);
+export type ScalarIndex = z.infer<typeof scalarIndexSchema>;
+
+export const renderableLayerValues = [...scalarIndexValues, "true_color"] as const;
+export const observationIndexValues = renderableLayerValues;
 export const observationIndexSchema = z.enum(observationIndexValues);
 export type ObservationIndex = z.infer<typeof observationIndexSchema>;
 

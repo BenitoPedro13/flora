@@ -1,9 +1,16 @@
 export const SATELLITE_QUEUE_NAME = 'satellite';
 
-/** One job per (org, field) refresh — always NDVI (architecture §5.5: only NDVI is on the daily schedule; other indices are implemented in `evalscript.ts` but not wired to a request path yet). */
+/**
+ * One job per (org, field) refresh. Omitted `mode` runs every scalar index
+ * in one Process call (`TASK-spectral-indices` §2.1, §7 decision 6) — both
+ * the nightly schedule and every "Refresh imagery" click share this same
+ * job. `mode: "true_color"` is the one on-demand exception (§2.5): a single
+ * 3-band RGB fetch, never scheduled, never bundled into the bulk call.
+ */
 export interface SatelliteRefreshJobData {
   organizationId: string;
   fieldId: string;
+  mode?: 'true_color';
 }
 
 export const ROLLUP_QUEUE_NAME = 'rollups';

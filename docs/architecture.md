@@ -309,7 +309,11 @@ date is edited.
 **`observations`** — the central time series.
 `(organization_id, field_id, captured_on, index, stats jsonb, raster_key text, bbox jsonb,
 scene_id text)` with `PRIMARY KEY (field_id, captured_on, index)`.
-`index` is an enum: `ndvi | ndre | ndwi | evi | true_color`. `stats` is JSONB
+`index` is an enum, widened by `TASK-spectral-indices` (2026-08-16) from five members to
+eleven: `ndvi | ndre | ndwi | evi | ndmi | msavi | reci | mcari | pri_proxy | vsdi |
+true_color`. The first ten are `packages/contracts`'s `scalarIndexValues` — every one gets
+stats, a ramp and detection eligibility; `true_color` is a renderable layer with none of that
+(no scalar value, no legend), added only to the wider `renderableLayerValues`. `stats` is JSONB
 (`min/max/mean/stddev/p10/p90`) rather than columns, so adding an index does not require a
 migration. `raster_key` is the **R2 object key** for the rendered PNG — never a signed URL
 (§18.4). `bbox` is the raster's geographic extent, needed to place it as a Mapbox image
@@ -485,17 +489,24 @@ One BullMQ Job Scheduler per field, daily 03:00 in that field's farm's timezone
   └─ satellite.refresh(organizationId, fieldId)      [queue: satellite, concurrency 2]
 
            1. Catalog API — find the latest scene intersecting the field bbox
-              with cloudCover < 20%. Skip if we already hold an observation
-              for (field, sceneDate, index).
-           2. Process API — ONE request, two named outputs (index + SCL) as
-              float32/uint8 GeoTIFFs, evalscript computing the index, clipped
-              to the field boundary.
-           3. In-worker: decode with geotiff.js →
+              with cloudCover < 20%. Skip if we already hold an NDVI
+              observation for (field, sceneDate) — the representative check;
+              every index in a refresh is written in the same pass (step 4).
+           2. Process API — ONE request, eleven named outputs (ten scalar
+              indices + SCL, `TASK-spectral-indices` §2.1) as float32/uint8
+              GeoTIFFs, one evalscript computing all ten, clipped to the
+              field boundary. Output count is free (measured against the
+              live account, §11.1) — cost is a function of input bands only.
+           3. In-worker, once per index: decode with geotiff.js →
                 a. compute stats (min/max/mean/stddev/p10/p90)
-                b. apply the colour ramp → PNG via sharp → upload to R2
-                c. threshold + vectorise → candidate stress polygons
-           4. Upsert `observations`; upsert `stress_zones` (preserving operator
-              classifications and mutes on zones that still overlap).
+                b. apply that index's colour ramp → PNG via sharp → upload to R2
+                c. NDVI only: threshold + vectorise → candidate stress polygons
+                   (`TASK-spectral-indices` §2.4 — running the detector over,
+                   say, NDWI would produce "stress zones" wherever there is
+                   water)
+           4. Upsert one `observations` row per index; upsert `stress_zones`
+              from NDVI's polygons only (preserving operator classifications
+              and mutes on zones that still overlap).
 ```
 
 **Implemented as one Job Scheduler per field, not literally "one repeatable job per farm"**
@@ -848,9 +859,9 @@ Free tier, verified: **10,000 processing units/month · 300 PU/min · 10,000 req
 300 requests/min · 2 concurrent requests · access tokens valid 10 minutes.** Monthly reset,
 no rollover.
 
-At 50 fields refreshed daily on one index that is ~1,500 requests/month — comfortable. The
-binding limits are **concurrency 2** (handled by pinning the satellite queue's concurrency,
-§6.3) and possibly **processing units rather than request count**.
+At 50 fields refreshed daily that is ~1,500 requests/month — comfortable regardless of how many
+indices one request carries, since output count doesn't change the request count (§7.2). The
+binding limit is **processing units**, not request count — see the measured numbers below.
 
 **PU formula resolved 2026-08-16 (`TASK-satellite-pipeline` §2.2), from CDSE's own Processing
 Unit documentation:**
@@ -863,15 +874,34 @@ PU = 1 (base @ 512x512px, 3 bands, <=16-bit)
      x samples_per_pixel
 ```
 
-At the worker's `RASTER_WIDTH_PX`/`RASTER_HEIGHT_PX` default (512x512, unchanged from the
-formula's own baseline resolution) with 6 input bands (B02/B03/B04/B05/B08/SCL) and the 2x
-float32 penalty, one refresh costs meaningfully more than 1 PU — the exact multiple depends on
-how CDSE counts the two-output TAR response (`§11.1` above), which is now a real, live round
-trip (`TASK-satellite-live`) but whose PU cost has not yet been read off CDSE's own usage
-dashboard. **The actual measured PU cost of one refresh, and the resulting 200-field/30-day
-projection against the 10,000 PU/month tier, is still open** (`TASK-satellite-pipeline` §6 item
-13) — read the number off CDSE's usage dashboard after a batch of live refreshes and fill this
-in.
+**Resolved 2026-08-16 (`TASK-spectral-indices` §1.3), measured against the live account, not
+estimated:** CDSE returns `x-processingunits-spent` on every Process response — no usage
+dashboard needed, and no previous task had read it. A controlled A/B/C run isolated output
+count from input band count:
+
+| Run | Input bands | Outputs | Measured PU |
+|---|---|---|---|
+| 6 bands (pre-`TASK-spectral-indices` shape) | 6 | 2 | **4.0** |
+| 8 bands, 11 outputs | 8 | 11 | **5.3333** |
+| 8 bands, 2 outputs (control) | 8 | 2 | **5.3333** |
+
+**Output count is free.** The 11-output and 2-output runs on the same 8 input bands cost
+*identical* PU to the last decimal — cost is a pure function of input bands
+(`6/3 × 2 = 4.0`; `8/3 × 2 = 5.333`, matching the formula above exactly). `TASK-spectral-indices`
+ships 7 input bands (the pre-existing 6 plus `B11`, not `B12` — its §7 decision 7), so one
+refresh costs **4.667 PU**, +17% over the pre-existing 4.0. At 200 fields and Sentinel-2's ~5-day
+revisit (the refresh processor already skips a scene it has stored, so a daily schedule buys
+~6 new scenes/field/month, not 30): **5,600 PU/month, 56% of the 10,000 tier** — NFR-6 passes,
+with headroom. Had the scene-skip guard not existed, the same pipeline would sit at 240% of the
+tier from request volume alone; that one-line optimisation is load-bearing, not incidental.
+
+**The free tier's binding number is PU, not requests** — the section above only stated
+10,000 requests/month; 10,000 PU/month is the tighter constraint by a wide margin at typical
+field counts.
+
+**The lever if this ever binds:** FLOAT32 output is a flat 2× PU multiplier (the `format_factor`
+term above). Switching to UINT16 with a documented scale/offset convention would halve every
+number in this section — recorded as `TASK-pu-budget`, not built (`TASK-spectral-indices` §9).
 
 Copernicus Sentinel *data* is free for commercial use, but CDSE states the portal's other
 contents are intended for non-commercial use, with commercial scale directed to Sentinel Hub

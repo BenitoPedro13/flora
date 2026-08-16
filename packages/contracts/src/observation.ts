@@ -56,6 +56,20 @@ export const listObservationDatesQuerySchema = z.object({
 export type ListObservationDatesQuery = z.infer<typeof listObservationDatesQuerySchema>;
 
 /**
+ * `POST /fields/:id/observations/refresh`'s request body — optional, empty
+ * by default. Omitted (or `{}`) refreshes every scalar index, the same job
+ * both the nightly schedule and every prior "Refresh imagery" click run
+ * (`TASK-spectral-indices` §7 decision 6). `mode: "true_color"` is the one
+ * on-demand exception (§2.5, built as a same-day follow-on): a single 3-band
+ * RGB fetch, never scheduled, never bundled into the bulk call — nobody
+ * needs yesterday's photo daily.
+ */
+export const refreshRequestSchema = z.object({
+  mode: z.literal("true_color").optional(),
+});
+export type RefreshRequest = z.infer<typeof refreshRequestSchema>;
+
+/**
  * `POST /fields/:id/observations/refresh`'s response. **202**, not 200 — the
  * job runs in the worker, never on this request (invariant 1). `jobId` is
  * BullMQ's job id, opaque to the caller; the screen task polls with it.

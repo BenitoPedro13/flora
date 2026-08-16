@@ -1,4 +1,5 @@
 import {
+  Body,
   Controller,
   Get,
   HttpCode,
@@ -20,6 +21,7 @@ import type { AccessTokenClaims } from '../auth/types.js';
 import { TenantTx } from '../tenancy/tenant-tx.decorator.js';
 import { ListObservationDatesQueryDto } from './dto/list-observation-dates-query.dto.js';
 import { ListObservationsQueryDto } from './dto/list-observations-query.dto.js';
+import { RefreshRequestDto } from './dto/refresh-request.dto.js';
 import { ObservationsService } from './observations.service.js';
 
 @Controller('fields')
@@ -52,8 +54,9 @@ export class ObservationsController {
     @TenantTx() tx: Tx,
     @CurrentUser() user: AccessTokenClaims,
     @Param('id', new ParseUUIDPipe()) id: string,
+    @Body() body: RefreshRequestDto,
   ): Promise<RefreshAccepted> {
-    return this.observationsService.refresh(tx, user.org, id);
+    return this.observationsService.refresh(tx, user.org, id, body.mode);
   }
 
   @Get(':id/observations/refresh/:jobId')

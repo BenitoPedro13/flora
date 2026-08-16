@@ -18,6 +18,8 @@ export const REFRESH_QUEUE = Symbol('REFRESH_QUEUE');
 export interface SatelliteRefreshJobData {
   organizationId: string;
   fieldId: string;
+  /** Omitted runs the all-scalar-index refresh; `"true_color"` is the one on-demand exception (`TASK-spectral-indices` §2.5). */
+  mode?: 'true_color';
 }
 
 /**

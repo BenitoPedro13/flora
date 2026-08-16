@@ -250,7 +250,15 @@ export function StressPanel({
   });
 
   const refreshMutation = useMutation({
-    mutationFn: () => apiFetchClient(`/api/v1/fields/${fieldId}/observations/refresh`, refreshAcceptedSchema, { method: "POST" }),
+    // `true_color` is the one on-demand exception (§2.5) — every other index
+    // rides the same all-scalar-index job the nightly schedule already runs,
+    // so the request body stays empty for them.
+    mutationFn: () =>
+      apiFetchClient(`/api/v1/fields/${fieldId}/observations/refresh`, refreshAcceptedSchema, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(indexParam === "true_color" ? { mode: "true_color" } : {}),
+      }),
     onSuccess: (data) => {
       pollStartRef.current = Date.now();
       setPollingJobId(data.jobId);
@@ -418,7 +426,10 @@ export function StressPanel({
             showMuted={showMuted}
           />
           <MapToolbar bounds={fieldBoundsFromGeojson(geojsonQuery.data ?? initialGeojson, fieldId)} />
-          {currentObservation ? <ColorRampLegend stats={currentObservation.stats} /> : null}
+          {/* true_color has no scalar value — no domain, no legend (§2.2). */}
+          {currentObservation && indexParam !== "true_color" ? (
+            <ColorRampLegend stats={currentObservation.stats} index={indexParam} />
+          ) : null}
           <StressPopover
             zone={selectedZone}
             onOpenChange={(open) => !open && selectZone(null)}

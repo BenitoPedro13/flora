@@ -10,8 +10,8 @@
 > not in architecture §16's phasing and displaces nothing there — Weather is untouched and
 > stays ready to build. Nothing in this task depends on Weather, or the reverse.
 >
-> **Status: ready to build. All seven §7 decisions are taken and every `[VERIFY]` is closed
-> against the real CDSE account or a published source** — §7 and §10 have the measurements.
+> **Status: implemented, 2026-08-16.** §11 records what shipped exactly as planned, what
+> deviated and why, and what's still open (NFR-5 re-measurement, the two disabled menu entries).
 >
 > **Three findings decide the shape of this task. All three are measured, none assumed:**
 >
@@ -411,3 +411,169 @@ this document originally assumed.
 **A cost fact worth carrying into every future satellite task:** FLOAT32 output is a flat **2×**
 PU multiplier. Half of every PU number this project has ever paid was buying precision past the
 fifth decimal of a ratio bounded in [−1, 1].
+
+---
+
+## 11. Implementation — 2026-08-16
+
+Built exactly to §2 with three deviations, all recorded honestly rather than silently absorbed
+into the "as planned" claim.
+
+**What shipped exactly as planned:** the enum split (`scalarIndexValues` /
+`renderableLayerValues`, `packages/contracts/src/enums.ts`); the migration
+(`packages/db/migrations/0011_index_enum.sql`, `ALTER TYPE … ADD VALUE … BEFORE 'true_color'` ×6,
+hand-reviewed — drizzle-kit's own auto-numbering collided with this repo's mixed
+hand-written/generated migration history and had to be renamed 0005→0011 by hand, see the
+commit); `evalscriptForAll` (one call, ten formulas, `B11` only, `evalscriptFor` kept for the
+single-index path); `fetchAllIndexRasters` (`packages/satellite`, TAR members extracted by name,
+shares its HTTP/error-handling with the pre-existing single-index path via one `callProcess`
+helper rather than two divergent copies); `RefreshProcessor` (both the nightly schedule and the
+manual "Refresh imagery" button, which share one job — TASK-crop-stress §1.1) now decodes,
+stores and writes N observations per scene, detection still gated to NDVI; the per-index ramp
+registry; the grouped switcher with sourced info tooltips.
+
+**Deviation 1 — decision 1's "plain NDVI" domain mode is not built, and ships disabled.**
+Shipping both "NDVI" (fixed 0…1 domain) and "Contrasted NDVI" (p10→p90) from **one stored
+raster with zero extra storage** — decision 1's literal claim — is only possible if the PNG
+stops being pre-baked colour and starts being a raw value the client recolours per domain
+(Mapbox GL's `raster-color`/`raster-color-mix` reading a raw-value PNG, verified to exist in
+recent Mapbox GL JS versions but not `[VERIFY]`-closed against this project's pinned version or
+built here). Building that changes the render architecture for every index, not just NDVI's two
+modes, and was out of proportion to the rest of this task. Shipped instead: the menu's working
+entry is honestly labelled **"Contrasted NDVI"** (matching finding #3 — that's what the stored
+raster already is), and a second, disabled **"NDVI"** entry sits next to it with a tooltip
+naming the reason — the same treatment `ColorRampLegend`'s pre-existing disabled "Relative"
+mode toggle already established for exactly this problem, extended rather than replaced. No
+legend ever claims a fixed domain it isn't painted with. Follow-on: a `raster-color` spike,
+probably folded into `TASK-pu-budget` since both touch how the PNG encodes its pixels.
+
+**Deviation 2 — the non-vegetation floor doesn't generalise, and wasn't generalised.** The
+pre-existing 0.10 transparency/stats floor (`TASK-satellite-pipeline` §7.5) was built for NDVI's
+specific shape and silently assumed for the whole raster. Applying it to NDWI would hide the
+water a wetness layer exists to show; RECI and MCARI aren't on NDVI's 0..1 scale at all. New
+file `packages/raster/src/vegetation-floor.ts` names which indices share NDVI's shape (`ndvi`,
+`ndre`, `evi`, `msavi`, `ndmi`) and applies the floor only to those; every other index (`ndwi`,
+`reci`, `mcari`, `pri_proxy`, `vsdi`) renders and computes stats over every in-field pixel, with
+only true nodata (outside the boundary clip) transparent. `computeStats`/`renderRasterPng`/
+`floorFilteredSortedValues` all take an optional `index` that defaults to `undefined`, which
+preserves the exact pre-existing NDVI-only behaviour bit-for-bit — no existing test needed to
+change its assertions, only its call sites gained an argument.
+
+**Deviation 3 — §2.6's grouping list was incomplete, and was extended rather than followed
+literally.** The bullet named six of ten scalar indices under "Vegetation" and two under "Water
+& moisture," omitting `pri_proxy`, `vsdi`, and `evi` (a pre-existing index outside the reference
+menu entirely) with nowhere to go. Shipped: `pri_proxy` joined Vegetation (a physiological
+light-use index), `vsdi` joined Water & moisture (§7 decision 5 calls VSDI a soil-*and*-
+vegetation moisture index), `evi` joined Vegetation. Every index is reachable; none is silently
+dropped from the menu.
+
+**Verification against §6:**
+
+1. **Done, live, 2026-08-16.** One real refresh (Field 237, triggered directly against the
+   `satellite` BullMQ queue after deleting its stored 2026-08-14 NDVI row so the skip-if-stored
+   guard wouldn't short-circuit the call) wrote observations for all ten scalar indices from one
+   Process call. This run caught a real bug — see §11.1 below — so its first pass's numbers were
+   contaminated and were deleted and re-verified after the fix.
+2. **Not done.** No committed golden GeoTIFF fixture per formula — `evalscript.spec.ts` instead
+   golden-tests the exact formula string every index's evalscript emits against hand-computed
+   values (§2.7's intent, a narrower mechanism: it catches a sign/operator typo in the shipped
+   string, not a raster-decode regression).
+3. **Confirmed live** — see item 1.
+4. **Confirmed live, in the user's own browser (not this session's automation — no browser tool
+   was available here).** The grouped switcher rendered correctly; the "SMI" (VSDI) legend was
+   the first thing to expose §11.1's clipping bug — real user testing catching what static types
+   and unit tests couldn't, the same pattern this project's own history keeps recording
+   (`TASK-satellite-pipeline` §10, `TASK-crop-stress` §10).
+5. **Not done.** NFR-5 (200 fields / 30 min / concurrency 2) needs a real multi-field timing run;
+   this session verified correctness on one and two fields respectively, not throughput at scale.
+6. **Clean** — `apps/web` still greps clean for raw hex (checked against every file this task
+   touched).
+7. **Done** — this section, plus architecture §5.3/§7.2/§11.1 and design-spec §9 (D29).
+
+### §11.1 Two live bugs found after the "done" verification above, both fixed same day
+
+**The clipping bug (VSDI, then MSAVI, then true-colour) — the most consequential defect this
+task shipped, caught by looking at a rendered map, not by any test.** `packages/raster/src/raster.ts`'s
+`decodeGeoTiff` decided "is this pixel outside the field boundary" by checking whether the
+**index band's own decoded value** was `NaN`. For NDVI-shaped ratios `(a-b)/(a+b)`, CDSE's
+zero-filled input outside the clip geometry hits `0/0 = NaN` — so every ratio formula clipped
+correctly, but **by accident**, not by any real nodata check. VSDI has no division at all
+(`1 - ((B11-B02)+(B04-B02))`) and evaluated to a perfectly finite `1` at masked input — the
+legend's own domain maximum, so the whole bounding-box rectangle painted solid green instead of
+clipping to the field polygon. MSAVI2's only division is by the constant `2`, so it evaluated to
+a finite `0` — invisible only because `0 < 0.10` already failed the unrelated non-vegetation
+floor (`vegetation-floor.ts`), a coincidence, not a fix. **The robust signal was already in every
+request and unused**: SCL class `0` ("No Data") is CDSE's own authoritative marker for "outside
+the clip geometry," shared by every output in one Process call regardless of what any formula
+computed there. Fixed in `decodeGeoTiff` — SCL `=== 0` now NaNs the index value outright,
+independent of the formula. Confirmed live with a diagnostic script before shipping the fix: at
+Field 237's four corner pixels, SCL read `0` while NDVI read `NaN` (its lucky `0/0`) and
+VSDI/MSAVI both read a finite in-range value. Regression test:
+`packages/raster/src/golden.spec.ts`'s "SCL is the authoritative nodata signal" case, a real
+GeoTIFF round trip with a masked pixel whose index value is deliberately finite and in-range.
+The 2026-08-14 observations this task's live verification (item 1 above) first wrote were
+contaminated for `vsdi`/`msavi` (a flat value and 20 phantom "stress-adjacent" pixels
+respectively) and 20 stress zones computed against the pre-fix NDVI decode; all were deleted and
+the field re-verified clean after the fix.
+
+**The same bug, again, in true-colour** — built as this section's own follow-on, same session:
+`evalscriptForTrueColor`'s gain-stretch (`2.5 * B04`, etc.) also has no division, so it evaluated
+to a finite `(0,0,0)` — solid black — outside the clip geometry, and the true-colour request
+didn't even request an `scl` output to fall back on. Caught live from the exact same class of
+screenshot (a black rectangle around the field instead of a transparent clip) minutes after
+shipping. Fixed identically: `evalscriptForTrueColor` now requests `scl` too (input bands gain
+`SCL`), `fetchTrueColorRaster`/`FetchTrueColorRasterResult`/`ProcessTrueColorResult` all carry it
+through, and `packages/raster/src/true-color.ts`'s `decodeTrueColorGeoTiff` applies the same
+SCL-class-0 rule to all three bands. No golden-fixture regression test for this one specifically
+— geotiff.js's writer silently drops values on a 3-band FLOAT32 encode (test tooling's own
+limitation, not production code, which only ever decodes real CDSE-provided multi-band TIFFs);
+the masking logic is byte-for-byte the pattern the scalar-index golden test already covers.
+
+**The lesson this project keeps re-learning, stated plainly for the next task that adds a
+formula:** a ratio's `0/0 = NaN` is not a nodata check, it's an accident that happens to look
+like one. Any new evalscript output whose formula isn't a ratio (a linear combination, a
+constant-denominator division, a lookup) needs `scl` requested and SCL-class-0 checked
+explicitly — it will not clip itself for free.
+
+**A third live bug, same session: the skip-if-stored check only ever checked NDVI.**
+Reported live — a user refreshing a field that already had an NDVI observation for today's
+scene (seeded, or from `TASK-satellite-live`'s own earlier live test) kept getting `?index=reci`
+back empty after a "completed" refresh. `observationExists(tx, org, field, date, 'ndvi')`
+treated NDVI's presence as proof the whole scene was processed — true before this task, false
+after it, since a pre-existing NDVI-only row now silently blocks the other nine from ever
+backfilling for that scene date until CDSE publishes a new one (~5 days). Fixed with a new query,
+`allObservationsExist` (`packages/db/src/queries/observations.ts`), true only when *every*
+requested index has a row — `RefreshProcessor.runRefresh` now checks it against the full
+`REFRESH_INDICES` list, not just NDVI. Regression test in
+`packages/db/src/queries/observations.spec.ts`.
+
+### §12 True-colour ("Satellite Image") — built as a follow-on, same day
+
+§1.4 and this document's earlier drafts left "Satellite Image" as ⚠️ unbuilt, deliberately —
+building a genuine 3-band RGB pipeline was judged out of proportion to the rest of this task and
+deferred. Asked for explicitly after the rest of this task shipped, so built the same day:
+
+- `evalscriptForTrueColor()` (`packages/satellite/src/cdse/evalscript.ts`) — `2.5 * B04/B03/B02`
+  clamped to 1, Sentinel Hub's own canonical Sentinel-2 true-colour custom script, plus `scl`
+  (§11.1's clipping fix).
+- `fetchTrueColorRaster` (`process.ts`, `provider.ts`, `cdse-provider.ts`, `fixture-provider.ts`)
+  — a dedicated single-purpose fetch, not a variant of `fetchAllIndexRasters`: true-colour was
+  never part of the scalar-index bulk call and still isn't.
+- `packages/raster/src/true-color.ts` — `decodeTrueColorGeoTiff`/`renderTrueColorPng`, a
+  genuinely different pipeline branch from `raster.ts`/`ramp.ts` (§1.4's own framing: "a
+  different pipeline branch, not a different formula"). No stats, no ramp, no domain.
+- A new on-demand job mode: `SatelliteRefreshJobData.mode?: "true_color"` (duplicated across
+  `apps/api/src/observations/refresh-queue.provider.ts` and
+  `apps/worker/src/queue/queues.ts`, matching the pre-existing duplication convention for that
+  file pair), a new `refreshRequestSchema` contract (`{ mode?: "true_color" }`), and
+  `RefreshProcessor.runTrueColorRefresh` — its own method, not a branch inside `runRefresh`:
+  no `recordRefreshResult` (a photo isn't NFR-8's crop-health signal), no rollup enqueue, a
+  degenerate all-zero placeholder `stats` (schema-required, never read — `ColorRampLegend` is
+  never rendered for `true_color`).
+- The switcher: "Satellite Image" moved from a disabled entry to a real one
+  (`components/flora/stress-header.tsx`); `stress-panel.tsx`'s refresh mutation sends
+  `{ mode: "true_color" }` only when that layer is selected, and skips `ColorRampLegend`
+  entirely for it.
+
+**Not done:** no golden-fixture test for the 3-band decode path (§11.1's note on geotiff.js's
+writer). NFR-5 unaffected (true-colour is on-demand, never part of the daily/scheduled wave).

@@ -1,8 +1,22 @@
 import type { BBox, MultiPolygon } from "@flora/contracts";
 import { findLatestScene } from "./cdse/catalog.js";
-import { fetchIndexRaster as processFetchIndexRaster } from "./cdse/process.js";
+import {
+  fetchAllIndexRasters as processFetchAllIndexRasters,
+  fetchIndexRaster as processFetchIndexRaster,
+  fetchTrueColorRaster as processFetchTrueColorRaster,
+} from "./cdse/process.js";
 import { getAccessToken, type CdseCredentials, type TokenCache } from "./cdse/token.js";
-import type { FetchIndexRasterInput, FetchIndexRasterResult, FindLatestSceneInput, Scene, SatelliteProvider } from "./provider.js";
+import type {
+  FetchAllIndexRastersInput,
+  FetchAllIndexRastersResult,
+  FetchIndexRasterInput,
+  FetchIndexRasterResult,
+  FetchTrueColorRasterInput,
+  FetchTrueColorRasterResult,
+  FindLatestSceneInput,
+  Scene,
+  SatelliteProvider,
+} from "./provider.js";
 
 function envelopeOf(boundary: MultiPolygon): BBox {
   let west = Infinity;
@@ -44,5 +58,28 @@ export class CdseSatelliteProvider implements SatelliteProvider {
       heightPx: input.heightPx,
     });
     return { indexGeotiff, sclGeotiff, bbox: envelopeOf(input.boundary) };
+  }
+
+  async fetchAllIndexRasters(input: FetchAllIndexRastersInput): Promise<FetchAllIndexRastersResult> {
+    const token = await getAccessToken(this.cache, this.credentials);
+    const { indexGeotiffs, sclGeotiff } = await processFetchAllIndexRasters(token, {
+      boundary: input.boundary,
+      sceneDate: input.sceneDate,
+      indices: input.indices,
+      widthPx: input.widthPx,
+      heightPx: input.heightPx,
+    });
+    return { indexGeotiffs, sclGeotiff, bbox: envelopeOf(input.boundary) };
+  }
+
+  async fetchTrueColorRaster(input: FetchTrueColorRasterInput): Promise<FetchTrueColorRasterResult> {
+    const token = await getAccessToken(this.cache, this.credentials);
+    const { rgbGeotiff, sclGeotiff } = await processFetchTrueColorRaster(token, {
+      boundary: input.boundary,
+      sceneDate: input.sceneDate,
+      widthPx: input.widthPx,
+      heightPx: input.heightPx,
+    });
+    return { rgbGeotiff, sclGeotiff, bbox: envelopeOf(input.boundary) };
   }
 }

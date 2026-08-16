@@ -3,6 +3,7 @@ import { InjectQueue, Processor, WorkerHost } from '@nestjs/bullmq';
 import type { Job, Queue } from 'bullmq';
 import type { Database, Tx } from '@flora/db';
 import {
+  allObservationsExist,
   bufferedFieldInterior,
   getFarm,
   getFieldBoundaryForRefresh,
@@ -15,14 +16,16 @@ import {
 import {
   computeStats,
   decodeGeoTiff,
+  decodeTrueColorGeoTiff,
   detectStressZones,
   rasterObjectKey,
   renderRasterPng,
+  renderTrueColorPng,
   sceneIsValid,
   type RasterStore,
 } from '@flora/raster';
 import { NoSceneError, type SatelliteProvider } from '@flora/satellite';
-import type { ObservationIndex } from '@flora/contracts';
+import { scalarIndexValues, type ObservationIndex, type ObservationStats, type ScalarIndex } from '@flora/contracts';
 import {
   ROLLUP_QUEUE_NAME,
   SATELLITE_QUEUE_NAME,
@@ -42,7 +45,28 @@ const SCENE_SEARCH_WINDOW_DAYS = 30;
 const MAX_CLOUD_COVER_PCT = 20;
 /** The §7.5 edge-buffer rule: one Sentinel-2 pixel of roadside contaminates the edge. */
 const EDGE_BUFFER_METRES = 10;
-const REFRESH_INDEX: ObservationIndex = 'ndvi'; // architecture §5.5: the only index on the daily schedule
+/**
+ * All ten scalar indices, one Process call (`TASK-spectral-indices` §2.1,
+ * §7 decision 6 — the product owner's call: all of them, daily, at +17% PU
+ * with no change in request count, measured against the live account §1.3).
+ * `NDVI_INDEX` must be a member of this list — it's the one scene validity
+ * and stress detection key off (§2.4: detection stays NDVI-only). The skip
+ * check itself covers every member of this list, not just NDVI (found
+ * live, a same-day follow-on: a field with only an NDVI row from before
+ * this task's ten-index bulk call must not silently block the other nine
+ * from ever backfilling for that scene date).
+ */
+const REFRESH_INDICES: readonly ScalarIndex[] = scalarIndexValues;
+const NDVI_INDEX: ScalarIndex = 'ndvi';
+const TRUE_COLOR_INDEX: ObservationIndex = 'true_color';
+/**
+ * `observations.stats` is `NOT NULL` and every scalar index has a real one —
+ * true-colour has none (§2.2: it's a renderable layer, not a scalar index),
+ * so this degenerate, all-zero placeholder ships instead of a schema
+ * change. Nothing reads it: `ColorRampLegend` is never rendered for
+ * `true_color` (`apps/web/app/(app)/fields/[fieldId]/stress/stress-panel.tsx`).
+ */
+const TRUE_COLOR_PLACEHOLDER_STATS: ObservationStats = { min: 0, max: 0, mean: 0, stddev: 0, p10: 0, p90: 0 };
 
 function daysAgo(days: number): string {
   const d = new Date();
@@ -76,29 +100,47 @@ export class RefreshProcessor extends WorkerHost {
   }
 
   async process(job: Job<SatelliteRefreshJobData>): Promise<void> {
-    const { organizationId, fieldId } = job.data;
+    const { organizationId, fieldId, mode } = job.data;
+    const isTrueColor = mode === 'true_color';
+
     await withOrganization(this.db, organizationId, async (tx) => {
       try {
-        await this.runRefresh(tx, organizationId, fieldId);
+        if (isTrueColor) {
+          await this.runTrueColorRefresh(tx, organizationId, fieldId);
+        } else {
+          await this.runRefresh(tx, organizationId, fieldId);
+        }
       } catch (err) {
         if (err instanceof NoSceneError) {
           // A skipped date is not a failure (§6 item 5): last_refresh_at
           // moves, last_refresh_succeeded_at does not, error stays NULL.
-          await recordRefreshResult(tx, organizationId, fieldId, {
-            succeeded: false,
-            error: null,
-          });
+          // True-colour never touches these fields at all (below) — a photo
+          // isn't the crop-health signal NFR-8's stale badge tracks.
+          if (!isTrueColor) {
+            await recordRefreshResult(tx, organizationId, fieldId, {
+              succeeded: false,
+              error: null,
+            });
+          }
           return;
         }
         const message = err instanceof Error ? err.message : String(err);
         this.logger.error(`refresh failed for field ${fieldId}: ${message}`);
-        await recordRefreshResult(tx, organizationId, fieldId, {
-          succeeded: false,
-          error: message,
-        });
+        if (!isTrueColor) {
+          await recordRefreshResult(tx, organizationId, fieldId, {
+            succeeded: false,
+            error: message,
+          });
+        }
         throw err;
       }
     });
+
+    if (isTrueColor) {
+      // A photo has no bearing on Home's rollups (Regeneration Score, crop
+      // health) — nothing there changed, so nothing to recompute.
+      return;
+    }
 
     // Reaching here means runRefresh completed without a real error — a
     // NoSceneError skip still enqueues, since other data (crop cycles,
@@ -156,14 +198,18 @@ export class RefreshProcessor extends WorkerHost {
     }
 
     // The cheapest possible quota saving (§2.4 step 1): skip the Process API
-    // call entirely if this exact scene date is already stored.
+    // call entirely if this exact scene date is already stored — but only
+    // once *every* scalar index has a row for it. A field with an NDVI row
+    // from before this task's ten-index bulk call (or an interrupted
+    // partial refresh) must not silently block the other nine from ever
+    // backfilling for that scene date — found live, a same-day follow-on.
     if (
-      await observationExists(
+      await allObservationsExist(
         tx,
         organizationId,
         fieldId,
         scene.date,
-        REFRESH_INDEX,
+        REFRESH_INDICES,
       )
     ) {
       await recordRefreshResult(tx, organizationId, fieldId, {
@@ -173,30 +219,32 @@ export class RefreshProcessor extends WorkerHost {
       return;
     }
 
-    const { indexGeotiff, sclGeotiff, bbox } =
-      await this.provider.fetchIndexRaster({
+    const { indexGeotiffs, sclGeotiff, bbox } =
+      await this.provider.fetchAllIndexRasters({
         boundary: boundary.boundary,
         sceneId: scene.id,
         sceneDate: scene.date,
-        index: REFRESH_INDEX,
+        indices: REFRESH_INDICES,
         widthPx: RASTER_WIDTH_PX,
         heightPx: RASTER_HEIGHT_PX,
       });
 
-    const raster = await decodeGeoTiff(indexGeotiff, sclGeotiff);
-    if (!sceneIsValid(raster)) {
+    // NDVI decides scene validity for the whole refresh — SCL (and the
+    // boundary-clip nodata footprint it shares with every other index, all
+    // requested against the same geometry in the same call) doesn't vary by
+    // index, so checking it once here is equivalent to checking it per index
+    // and ten times cheaper.
+    const ndviGeotiff = indexGeotiffs.get(NDVI_INDEX);
+    if (!ndviGeotiff) {
+      // The provider throws before returning if any requested member is
+      // missing from the TAR — this is unreachable in practice, only here so
+      // the type checker doesn't need a non-null assertion.
       throw new NoSceneError();
     }
-
-    const stats = computeStats(raster);
-    const png = await renderRasterPng(raster, stats);
-    const rasterKey = rasterObjectKey(
-      organizationId,
-      fieldId,
-      REFRESH_INDEX,
-      scene.date,
-    );
-    await this.rasterStore.putRaster(rasterKey, png);
+    const ndviRaster = await decodeGeoTiff(ndviGeotiff, sclGeotiff);
+    if (!sceneIsValid(ndviRaster)) {
+      throw new NoSceneError();
+    }
 
     const bufferedInterior = await bufferedFieldInterior(
       tx,
@@ -204,26 +252,116 @@ export class RefreshProcessor extends WorkerHost {
       fieldId,
       EDGE_BUFFER_METRES,
     );
-    const zones = bufferedInterior
-      ? detectStressZones({ raster, bbox, bufferedInterior })
-      : [];
+
+    for (const index of REFRESH_INDICES) {
+      const raster =
+        index === NDVI_INDEX
+          ? ndviRaster
+          : await decodeGeoTiff(indexGeotiffs.get(index)!, sclGeotiff);
+
+      const stats = computeStats(raster, index);
+      const png = await renderRasterPng(raster, stats, index);
+      const rasterKey = rasterObjectKey(organizationId, fieldId, index, scene.date);
+      await this.rasterStore.putRaster(rasterKey, png);
+
+      // Stress detection stays NDVI-only (§2.4) — running the polygon
+      // detector over, say, NDWI would produce "stress zones" wherever
+      // there is water.
+      const zones =
+        index === NDVI_INDEX && bufferedInterior
+          ? detectStressZones({ raster, bbox, bufferedInterior })
+          : [];
+
+      await upsertObservationAndZones(tx, {
+        organizationId,
+        fieldId,
+        capturedOn: scene.date,
+        index,
+        stats,
+        rasterKey,
+        bbox,
+        sceneId: scene.id,
+        zones,
+        windowStart: daysAgo(SCENE_SEARCH_WINDOW_DAYS),
+        windowEnd: scene.date,
+      });
+    }
+
+    await recordRefreshResult(tx, organizationId, fieldId, {
+      succeeded: true,
+      error: null,
+    });
+  }
+
+  /**
+   * The on-demand-only true-colour path (§2.5, built as a same-day
+   * follow-on to `TASK-spectral-indices`) — one 3-band RGB fetch, no
+   * stats, no detection, no `recordRefreshResult` (a photo isn't NFR-8's
+   * crop-health signal). Reuses `upsertObservationAndZones` with an empty
+   * zone list purely to reuse the one write path already trusted with the
+   * `(field, date, index)` upsert, not because true-colour has zones.
+   */
+  private async runTrueColorRefresh(
+    tx: Tx,
+    organizationId: string,
+    fieldId: string,
+  ): Promise<void> {
+    const boundary = await getFieldBoundaryForRefresh(
+      tx,
+      organizationId,
+      fieldId,
+    );
+    if (!boundary) {
+      return;
+    }
+
+    const scene = await this.provider.findLatestScene({
+      bbox: boundary.bbox,
+      from: daysAgo(SCENE_SEARCH_WINDOW_DAYS),
+      to: today(),
+      maxCloudCoverPct: MAX_CLOUD_COVER_PCT,
+    });
+    if (!scene) {
+      throw new NoSceneError();
+    }
+
+    if (
+      await observationExists(
+        tx,
+        organizationId,
+        fieldId,
+        scene.date,
+        TRUE_COLOR_INDEX,
+      )
+    ) {
+      return;
+    }
+
+    const { rgbGeotiff, sclGeotiff, bbox } = await this.provider.fetchTrueColorRaster({
+      boundary: boundary.boundary,
+      sceneId: scene.id,
+      sceneDate: scene.date,
+      widthPx: RASTER_WIDTH_PX,
+      heightPx: RASTER_HEIGHT_PX,
+    });
+
+    const raster = await decodeTrueColorGeoTiff(rgbGeotiff, sclGeotiff);
+    const png = await renderTrueColorPng(raster);
+    const rasterKey = rasterObjectKey(organizationId, fieldId, TRUE_COLOR_INDEX, scene.date);
+    await this.rasterStore.putRaster(rasterKey, png);
 
     await upsertObservationAndZones(tx, {
       organizationId,
       fieldId,
       capturedOn: scene.date,
-      index: REFRESH_INDEX,
-      stats,
+      index: TRUE_COLOR_INDEX,
+      stats: TRUE_COLOR_PLACEHOLDER_STATS,
       rasterKey,
       bbox,
       sceneId: scene.id,
-      zones,
+      zones: [],
       windowStart: daysAgo(SCENE_SEARCH_WINDOW_DAYS),
       windowEnd: scene.date,
-    });
-    await recordRefreshResult(tx, organizationId, fieldId, {
-      succeeded: true,
-      error: null,
     });
   }
 }

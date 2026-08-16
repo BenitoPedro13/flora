@@ -41,7 +41,8 @@ now sends `Accept: application/tar` and extracts named TAR members instead of ca
 `res.formData()` on a bare TIFF), `TASK-tasks-board` (Phase 3, `24:11420` — the third and
 last link of the spine), and `TASK-home-dashboard` (Phase 4, `1:12913` — the first screen that
 reads across every domain instead of owning one) have all landed. **Phases 0 through 4 are
-complete**; Phase 5 (`TASK-weather`) is next.
+complete**; `TASK-spectral-indices` (not itself a numbered phase — product owner's call,
+2026-08-16, built ahead of Phase 5) has also landed. Phase 5 (`TASK-weather`) is next.
 Email+password login with cookie sessions works end to end in a real browser, styled with
 AlignUI tokens; every tenant table is protected by the catalog test in
 `packages/db/src/queries/tenancy.spec.ts`, now a named allowlist of **three** SECURITY DEFINER
@@ -117,9 +118,50 @@ it only paints the *live* page before capturing, never the stored baseline, so i
 suppress diff noise against an external, un-doctored Figma export the way it incidentally does
 for `shell.spec.ts`'s small sidebar-identity mask — the real measured floor (9%, real per-farm
 data against the mock's illustrative numbers) is recorded with headroom instead, the same
-"measured floor, not silently loosened" precedent `shell.spec.ts` §10 already set. Next:
-`TASK-weather` (Phase 5) — the ingest already stores the full 7-day/wind/UV/pressure/
-sunrise-sunset payload Home doesn't read.
+"measured floor, not silently loosened" precedent `shell.spec.ts` §10 already set.
+`TASK-spectral-indices` then widened the satellite pipeline from one scheduled index to ten:
+`observation_index` grew from five enum members to eleven (`ndmi`, `msavi`, `reci`, `mcari`,
+`pri_proxy`, `vsdi` added; `true_color` split into a separate `renderableLayerValues` set that
+isn't a scalar index — `scalarIndexValues` is now the one with stats/ramp/detection eligibility);
+`evalscriptForAll` emits all ten in one Process call, verified live against the real CDSE account
+to cost **exactly** what a two-output call with the same input bands costs (output count is
+free) — one refresh is **4.667 PU**, +17% over the pre-existing 4.0, closing architecture
+§11.1's PU `[VERIFY]` for the first time; `RefreshProcessor` (both the nightly schedule and the
+"Refresh imagery" button, which share one job) now writes N `observations` rows and N PNGs per
+scene instead of one, with stress-zone detection still gated to NDVI only. Two indices needed a
+product decision rather than a formula: PRI has no true substitute on Sentinel-2 (no 531nm band)
+and ships as `pri_proxy`, labelled "PRI (proxy)" everywhere a user can see it, never bare "PRI";
+"SMI" resolves to VSDI (Zhang et al. 2013, published, single-scene, on B11/B04/B02) because the
+alternatives both fail — the LST/NDVI trapezoid needs thermal data Sentinel-2 doesn't carry, and
+OPTRAM needs a fitted time series, not a per-scene formula. The reference competitor menu's
+"Contrasted NDVI" turned out to already be what NDVI has shipped since `TASK-crop-stress` —
+`rampDomain`'s p10→p90 stretch — so the menu now labels that entry "Contrasted NDVI" honestly;
+"plain" fixed-domain NDVI would need a client-side colour-mapped raster (Mapbox `raster-color`
+reading a raw-value PNG, decision recorded in `TASK-spectral-indices` §7 decision 1 / §10) this
+task didn't build, and ships **disabled with a tooltip** instead of a legend that lies about what
+painted the pixels — the same treatment the switcher gives "Satellite Image" (true-colour's real
+3-band pipeline, also unbuilt) and the three greyed-out reference items with no data source.
+`packages/contracts/src/ramp.ts` grew from one stop set to a per-index registry
+(`INDEX_RAMPS`) — NDWI is the one index that isn't the health ramp (`NDWI_RAMP_STOPS`, an
+amber→slate→sky gradient) and reads `higherIsBetter: false`, so a flooded field can't paint as
+thriving. `packages/raster` grew a `vegetation-floor.ts`: the pre-existing 0.10 non-vegetation
+transparency/stats floor is real for NDVI-shaped ratios (NDVI, NDRE, EVI, MSAVI, NDMI) and wrong
+for the rest (NDWI's "low" is dry land, not noise to exclude; RECI/MCARI aren't on NDVI's 0..1
+scale at all) — every pre-existing caller that passes no index keeps the original NDVI-only
+behaviour bit-for-bit. Two live bugs surfaced right after that "done," both fixed same day: SCL
+class 0 ("No Data"), not a formula's own `0/0 = NaN`, is now the authoritative signal
+`packages/raster/src/raster.ts`'s `decodeGeoTiff` uses for "outside the field boundary" — VSDI
+(no division in its formula) and MSAVI2 (division only by the constant 2) both evaluated to a
+finite, in-range number at masked pixels instead of `NaN`, so VSDI painted the whole
+bounding-box rectangle instead of clipping to the field polygon (MSAVI's identical bug was
+invisible only by the coincidence of also failing the unrelated 0.10 vegetation floor). Caught
+from a live screenshot, not a test. `TASK-spectral-indices` also picked up its own deferred
+"Satellite Image" gap as a same-day follow-on — a real 3-band true-colour pipeline
+(`evalscriptForTrueColor`, `packages/raster/src/true-color.ts`, a new on-demand-only
+`mode: "true_color"` job) — which hit the identical clipping bug for the identical reason (no
+division in the gain-stretch formula) and got the identical fix (request `scl`, check class 0).
+Next: `TASK-weather` (Phase 5) — the ingest already stores the full
+7-day/wind/UV/pressure/sunrise-sunset payload Home doesn't read.
 The retired prototype was deleted by `TASK-foundations` after tagging `prototype-v0`;
 `geo_spike`, the schema spike that proved the PostGIS/Drizzle round-trip, was retired by
 `TASK-domain-schema` once `fields` landed.
@@ -200,9 +242,11 @@ project's own docs before installing (§2.0).
    holding colour values are `app/globals.css`, `components/charts/config.ts`, and
    `components/map/config.ts` (design-spec §10). The last exists because Mapbox GL's paint
    properties are JSON values, not CSS classes, and its style parser does not resolve
-   `var(--color-*)` — `TASK-fields` §3.4. **Amended 2026-08-16 (`TASK-crop-stress` §2.2/§3.3):**
-   `packages/contracts/src/ramp.ts` also holds one raw stop set, `NDVI_RAMP_STOPS` — it is the
-   single source both the worker (encodes a PNG's pixels, not a component) and
+   `var(--color-*)` — `TASK-fields` §3.4. **Amended 2026-08-15 (`TASK-crop-stress` §2.2/§3.3),
+   widened 2026-08-16 (`TASK-spectral-indices` §2.3):** `packages/contracts/src/ramp.ts` also
+   holds the raw stop sets — `NDVI_RAMP_STOPS` (nine of ten indices) and `NDWI_RAMP_STOPS` (the
+   one that isn't the health ramp) — behind a per-index `INDEX_RAMPS` registry. It is the single
+   source both the worker (encodes a PNG's pixels, not a component) and
    `components/map/config.ts` (re-exports, doesn't declare) read from, so the legend and the
    raster it labels can never paint from a different ramp. `apps/web` itself still has exactly
    the three named files; a grep for raw hex under `apps/web` stays clean.

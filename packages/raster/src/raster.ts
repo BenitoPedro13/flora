@@ -1,5 +1,6 @@
-import type { ObservationStats } from "@flora/contracts";
+import type { ObservationIndex, ObservationStats } from "@flora/contracts";
 import { fromArrayBuffer } from "geotiff";
+import { indexHasVegetationFloor, NON_VEGETATION_FLOOR } from "./vegetation-floor.js";
 
 /**
  * GeoTIFF → stats (architecture §7.2 step 3a). The Process API request
@@ -14,8 +15,6 @@ import { fromArrayBuffer } from "geotiff";
  * decodes two single-band GeoTIFFs, not one two-band file.
  */
 
-const NON_VEGETATION_FLOOR = 0.1;
-
 /**
  * Sentinel-2 L2A SCL classes counted as "clear" for the §7.5 scene-validity
  * rule: vegetation(4), not-vegetated(5), water(6), unclassified(7), snow(11).
@@ -24,6 +23,8 @@ const NON_VEGETATION_FLOOR = 0.1;
  * Sentinel-2 Level-2A classification (stable, public spec, not a `[VERIFY]`).
  */
 const CLEAR_SCL_CLASSES = new Set([4, 5, 6, 7, 11]);
+/** SCL class 0 = "No Data" — the authoritative outside-the-clip-geometry signal, independent of what any index's own formula computed there (see the note on `decodeGeoTiff` below). */
+const NO_DATA_SCL_CLASS = 0;
 
 export interface DecodedRaster {
   width: number;
@@ -46,6 +47,30 @@ async function decodeSingleBand(buffer: ArrayBuffer): Promise<{ width: number; h
   };
 }
 
+/**
+ * **Bug found live, 2026-08-16 (`TASK-spectral-indices` follow-on):** outside
+ * the requested clip geometry, CDSE doesn't write a nodata sentinel into the
+ * index band's own pixel value — it feeds the evalscript zero-filled input
+ * bands and lets the formula run. For every index built on a ratio
+ * `(a-b)/(a+b)` that lands on `0/0 = NaN`, which is why NDVI (and every
+ * other ratio-shaped index) already clipped correctly — by accident, not by
+ * a nodata check. **VSDI has no division at all** (`1 - ((B11-B02)+(B04-B02))`
+ * evaluates to a perfectly finite `1` at zero input) and rendered the whole
+ * bounding-box rectangle opaque instead of clipping to the field boundary —
+ * caught from a live screenshot, the same "look at it" discovery pattern
+ * `TASK-satellite-pipeline` §10 and `TASK-crop-stress` §10 both already
+ * recorded for this exact class of bug. MSAVI2's only division is by the
+ * constant `2`, so it evaluates to a finite `0` at zero input — invisible
+ * only because `0 < 0.10` already fails the unrelated non-vegetation floor
+ * (`vegetation-floor.ts`), a coincidence, not a fix. The robust signal is
+ * the **SCL band**, not the index band: SCL class `0` ("No Data") is
+ * authoritative for "outside the clip" regardless of what any formula
+ * computed there, because CDSE clips the whole request to one geometry in
+ * one call — SCL and every index output share the same nodata footprint by
+ * construction. Confirmed live: at Field 237's four corner pixels (all
+ * clearly outside its boundary), SCL read `0` while NDVI read `NaN` (its
+ * lucky 0/0) and VSDI/MSAVI both read a finite in-range value.
+ */
 export async function decodeGeoTiff(indexBuffer: ArrayBuffer, sclBuffer: ArrayBuffer): Promise<DecodedRaster> {
   const indexBand = await decodeSingleBand(indexBuffer);
   const sclBand = await decodeSingleBand(sclBuffer);
@@ -56,14 +81,15 @@ export async function decodeGeoTiff(indexBuffer: ArrayBuffer, sclBuffer: ArrayBu
   }
   const { width, height } = indexBand;
 
-  const indexValues = new Float32Array(width * height);
-  for (let i = 0; i < indexValues.length; i++) {
-    const v = indexBand.values[i]!;
-    indexValues[i] = indexBand.nodata !== null && v === indexBand.nodata ? NaN : v;
-  }
   const sclValues = new Uint8Array(width * height);
   for (let i = 0; i < sclValues.length; i++) {
     sclValues[i] = sclBand.values[i]!;
+  }
+  const indexValues = new Float32Array(width * height);
+  for (let i = 0; i < indexValues.length; i++) {
+    const v = indexBand.values[i]!;
+    const isNodataSentinel = indexBand.nodata !== null && v === indexBand.nodata;
+    indexValues[i] = isNodataSentinel || sclValues[i] === NO_DATA_SCL_CLASS ? NaN : v;
   }
 
   return { width, height, indexValues, sclValues };
@@ -109,12 +135,16 @@ export function percentile(sorted: Float64Array, p: number): number {
  * The floor-filtered, sorted population both `computeStats`'s percentiles
  * and `detect.ts`'s field-median severity threshold read from — one sort,
  * shared, so the two can never silently disagree on which pixels count as
- * "the field" (TASK-satellite-pipeline §7.5).
+ * "the field" (TASK-satellite-pipeline §7.5). `detect.ts` always calls this
+ * with no `index` (it only ever runs against NDVI — §2.4). `index` decides
+ * whether the 0.10 floor applies at all (`vegetation-floor.ts`); omitting it
+ * preserves the original NDVI-only behaviour bit-for-bit.
  */
-export function floorFilteredSortedValues(raster: DecodedRaster): Float64Array {
+export function floorFilteredSortedValues(raster: DecodedRaster, index?: ObservationIndex): Float64Array {
+  const applyFloor = indexHasVegetationFloor(index);
   const values: number[] = [];
   for (const v of raster.indexValues) {
-    if (!Number.isNaN(v) && v >= NON_VEGETATION_FLOOR) {
+    if (!Number.isNaN(v) && (!applyFloor || v >= NON_VEGETATION_FLOOR)) {
       values.push(v);
     }
   }
@@ -127,10 +157,12 @@ export function floorFilteredSortedValues(raster: DecodedRaster): Float64Array {
  * the vegetated population the legend and the detector both reason about
  * (§7.5: floor pixels dragging p10 down is exactly the under-fire bug this
  * exclusion prevents; applying it uniformly avoids a second, inconsistent
- * "raw" stats object nobody asked for).
+ * "raw" stats object nobody asked for). `TASK-spectral-indices` §2.3: the
+ * floor itself only applies for indices it makes sense for — see
+ * `vegetation-floor.ts`. `index` omitted defaults to NDVI's own behaviour.
  */
-export function computeStats(raster: DecodedRaster): ObservationStats {
-  const sorted = floorFilteredSortedValues(raster);
+export function computeStats(raster: DecodedRaster, index?: ObservationIndex): ObservationStats {
+  const sorted = floorFilteredSortedValues(raster, index);
   const n = sorted.length;
   const min = n > 0 ? sorted[0]! : NaN;
   const max = n > 0 ? sorted[n - 1]! : NaN;

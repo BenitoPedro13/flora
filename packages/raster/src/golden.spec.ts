@@ -65,6 +65,32 @@ function fullBboxPolygon(bbox: BBox): Polygon {
   };
 }
 
+describe("decodeGeoTiff — SCL is the authoritative nodata signal, not the index band's own value", () => {
+  /**
+   * Found live, 2026-08-16: VSDI has no division in its formula, so CDSE's
+   * zero-filled input outside the clip geometry evaluates to a perfectly
+   * finite `1` instead of `NaN` — the whole bounding-box rectangle rendered
+   * opaque instead of clipping to the field boundary. NDVI-shaped ratio
+   * formulas clip correctly only by accident (`0/0 = NaN`); SCL class 0
+   * ("No Data") is the real signal, shared by every output in one request.
+   */
+  it("NaNs an index pixel whose SCL reads 0, even though the index band's own value is finite and in-range", async () => {
+    const width = 2;
+    const height = 1;
+    // A VSDI-shaped bug: the masked pixel's "index" value is a plausible,
+    // in-range 1.0 — nothing about the index band alone flags it as invalid.
+    const index = Float32Array.from([1.0, 0.6]);
+    const scl = Uint8Array.from([0, 4]); // pixel 0: No Data; pixel 1: vegetation, clear
+
+    const indexBuffer = writeArrayBuffer(index, { width, height, BitsPerSample: [32], SampleFormat: [3] });
+    const sclBuffer = writeArrayBuffer(scl, { width, height, BitsPerSample: [8], SampleFormat: [1] });
+
+    const raster = await decodeGeoTiff(indexBuffer, sclBuffer);
+    expect(Number.isNaN(raster.indexValues[0])).toBe(true);
+    expect(raster.indexValues[1]).toBeCloseTo(0.6, 4);
+  });
+});
+
 describe("golden fixture — decode -> stats -> detect", () => {
   it("decodes real GeoTIFF bytes into the exact known pixel values", async () => {
     const { indexBuffer, sclBuffer } = buildFixture();

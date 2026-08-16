@@ -90,17 +90,20 @@ export class ObservationsService {
   /**
    * A BullMQ **producer** — a Redis `LPUSH`, sub-millisecond, no HTTP to
    * CDSE (invariant 1). The job runs in the worker; enqueueing is not
-   * calling.
+   * calling. `mode: "true_color"` is the one on-demand exception
+   * (`TASK-spectral-indices` §2.5) — omitted runs the same all-scalar-index
+   * job the nightly schedule and every prior "Refresh imagery" click run.
    */
   async refresh(
     tx: Tx,
     organizationId: string,
     fieldId: string,
+    mode?: 'true_color',
   ): Promise<RefreshAccepted> {
     if (!(await fieldExists(tx, organizationId, fieldId))) {
       throw new NotFoundException();
     }
-    const job = await this.queue.add('refresh', { organizationId, fieldId });
+    const job = await this.queue.add('refresh', { organizationId, fieldId, mode });
     return { jobId: job.id! };
   }
 
