@@ -75,7 +75,7 @@ export function Hero() {
               <Link href="/login">Get Started</Link>
             </Button.Root>
             <Button.Root asChild variant="neutral" mode="stroke" size="medium">
-              <Link href="/login">Explore Features</Link>
+              <a href="#features">Explore Features</a>
             </Button.Root>
           </div>
         </div>

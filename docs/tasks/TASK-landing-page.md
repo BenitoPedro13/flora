@@ -128,8 +128,18 @@ Two decisions landed mid-build, both from the user directly:
 Shipped: `/` (public, was previously unreachable — every visitor got redirected to `/login`),
 `Hero` (headline, real CTAs to `/login`, the live `AppPreview`, a nav strip that's honest about
 what's unbuilt — Use Cases/About Us/Contact Us/Blog are all `#` placeholders, not dead anchors
-into non-existent sections), `Footer` (logo, real copyright line, `Home`/`Log in` links only —
-the Figma's fictional customer names and template-author credit both dropped).
+into non-existent sections), `Features` (`components/flora/landing/features.tsx` — real copy
+about Flora's four real capabilities, Fields & Crops/Crop Stress/Tasks/Weather, each with an
+actual `FieldCard`/`StressSummary`/`TaskCard`/`WeatherDayCard` as its visual instead of the
+Figma's repeated filler text and fictional per-tab mockups), `Footer` (logo, real copyright
+line, `Home`/`Log in` links only — the Figma's fictional customer names and template-author
+credit both dropped).
+
+`Features` is a Client Component (`"use client"`) — its reused composites (`FieldCard`,
+`TaskCard`, `StressSummary`) attach real `onClick` handlers to real DOM elements even with
+no-op callbacks here, and Next's build fails outright on that without the directive ("If you
+need interactivity, consider converting part of this to a Client Component") rather than
+silently degrading — caught by `next build`, not `next dev`.
 
 Two more real bugs found and fixed, both pre-existing, both invisible until this task exercised
 the code paths:
