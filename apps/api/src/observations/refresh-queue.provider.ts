@@ -35,7 +35,12 @@ export interface SatelliteRefreshJobData {
 export function createRefreshQueue(): Queue<SatelliteRefreshJobData> {
   const url = new URL(process.env.REDIS_URL!);
   return new Queue<SatelliteRefreshJobData>(SATELLITE_QUEUE_NAME, {
-    connection: { host: url.hostname, port: Number(url.port || 6379) },
+    connection: {
+      host: url.hostname,
+      port: Number(url.port || 6379),
+      username: url.username || undefined,
+      password: url.password || undefined,
+    },
     defaultJobOptions: {
       attempts: 5,
       backoff: { type: 'exponential', delay: 5_000, jitter: 0.5 },

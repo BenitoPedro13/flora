@@ -113,8 +113,20 @@ const logger = new Logger('AppModule');
 })
 export class AppModule {}
 
-/** ioredis wants host/port (or a full options object); BullMQ's own connection option accepts the same. */
-function parseRedisUrl(url: string): { host: string; port: number } {
+/**
+ * ioredis wants host/port (or a full options object); BullMQ's own connection
+ * option accepts the same. Username/password matter here even though the app's
+ * own REDIS_CLIENT above connects via the URL string directly (ioredis parses
+ * auth out of a URL itself) — invisible locally since infra/docker-compose.yml's
+ * Redis has no auth configured, but a managed Redis with a password fails
+ * every command with NOAUTH otherwise.
+ */
+function parseRedisUrl(url: string): { host: string; port: number; username?: string; password?: string } {
   const parsed = new URL(url);
-  return { host: parsed.hostname, port: Number(parsed.port || 6379) };
+  return {
+    host: parsed.hostname,
+    port: Number(parsed.port || 6379),
+    username: parsed.username || undefined,
+    password: parsed.password || undefined,
+  };
 }
