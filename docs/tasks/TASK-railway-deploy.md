@@ -120,3 +120,72 @@ R2 or self-hosted MinIO.
   `apps/worker` run themselves).
 - Seed data present: a row count check against `farms`/`fields`/`crops` post-seed.
 - A manual login + `/fields` render against the deployed URL, browser-verified.
+
+### 6.1 Outcome (2026-08-17)
+
+All six services (`postgres`, `cache`, `storage`, `api`, `worker`, `web`) reached `SUCCESS` in
+the `flora` project under the `designmainnet-cell's Projects` workspace. Live at
+**https://flora.up.railway.app**.
+
+- `curl https://flora.up.railway.app/api/v1/health` → `{"status":"ok",...}`; `/api/v1/ready` →
+  `{"status":"ok"}`.
+- `POST /api/v1/auth/login` with the seeded owner credentials → `204`; the resulting session
+  cookie reads real seeded fields back from `GET /api/v1/fields` (four fields, real crop
+  cycles, real `areaM2`/`centroid` values) — full request → API → Postgres → response loop
+  confirmed live, not just a health check.
+- Data: not the seed *scripts* re-run against prod — the user asked for the actual local
+  Docker Postgres data instead. `docker exec flora-db-1 pg_dump -U flora -d flora --data-only
+  --disable-triggers -Fc` → `pg_restore` against the deployed Postgres through a temporary
+  `railway tcp-proxy` (deleted immediately after). Row counts matched exactly on both sides
+  (1 org, 1 user, 1 farm, 4 fields, 5 crops, 16 crop cycles, 332 observations, 78 stress
+  zones, 19 tasks, 30 rollups, 30 farm scores, 32 weather snapshots). The only `pg_restore`
+  error was a harmless `_migrations` bookkeeping-table key conflict — expected, since both
+  databases ran the identical migration files independently and already agreed on that table's
+  contents.
+- `flora_app`'s password was rotated off the migration's hardcoded dev placeholder
+  (`0003_tenancy_rls.sql`'s own instruction) via `railway ssh`/`tcp-proxy` + `ALTER ROLE`, with
+  `DATABASE_URL` updated to match on both `api` and `worker`.
+- CDSE and Mapbox credentials came from the working local `.env` (both already real, working
+  values) rather than being left blank — satellite refresh and the map are live in prod, not
+  degraded. `SATELLITE_SCHEDULE_ENABLED`/`ROLLUP_SCHEDULE_ENABLED`/`WEATHER_SCHEDULE_ENABLED`
+  stay `false`, same conservative default as local dev.
+
+### 6.2 Bugs this deploy found (all fixed, all invisible in local dev)
+
+Matches this repo's own pattern (`TASK-crop-stress` §10, `TASK-spectral-indices`) of real bugs
+only surfacing against a real environment, not by inspection:
+
+1. **`apps/api` and `apps/worker`'s `start:prod` pointed at `dist/main`, but `nest build`
+   actually emits `dist/src/main.js`.** Never caught locally because `pnpm dev` always runs
+   `start:dev` (`nest start --watch`, straight from `src/` via `ts-node`/`swc`) — `start:prod`
+   had never actually been executed before this deploy. Fixed in both `package.json`s.
+2. **`apps/worker`'s `parseRedisUrl()` and `apps/api`'s `createRefreshQueue()` each hand-built
+   BullMQ's `connection` option as `{host, port}`, dropping `REDIS_URL`'s username/password
+   entirely.** `infra/docker-compose.yml`'s Redis has no `requirepass`, so this was silently
+   correct locally and silently wrong against any Redis that requires auth — Railway's managed
+   Redis returned `NOAUTH` on every command. Fixed in both files to parse and forward
+   `username`/`password`.
+3. **`apps/web/next.config.ts`'s `rewrites()` needs `API_URL` at build time**, and Railway's
+   Railpack build sandbox does not expose service environment variables to the build command —
+   confirmed empirically (the same variable resolves correctly via `railway variable list`,
+   contradicting Railway's own general docs) after two failed attempts assuming otherwise. A
+   first fix (return an empty rewrites array during `PHASE_PRODUCTION_BUILD`) avoided the build
+   crash but shipped a manifest with no rewrite at all — `next start` does not re-invoke
+   `rewrites()`, it serves from the `routes-manifest.json` Next.js writes once at `next build`.
+   The real fix falls back to the deployment's known private-network URL
+   (`http://api.railway.internal:3001`) specifically during the build phase, so the baked
+   manifest has a working rewrite; the real env var still wins whenever present.
+4. **`WEB_ORIGIN` was set once, early, to a domain that didn't survive** — the `web` service got
+   deleted and recreated (§2's ghost-service cleanup) after `WEB_ORIGIN` was already set on
+   `api`/`worker`, and Railway assigned a *different* generated domain
+   (`flora.up.railway.app`, not `web-production-*.up.railway.app`) the second time. `curl`
+   testing never caught it because `curl` sends no `Origin` header, so
+   `originCheckMiddleware` never ran its check — a real browser login 403'd until `WEB_ORIGIN`
+   was corrected on both `api` and `worker` and `api` redeployed.
+
+### 6.3 Left out of scope, still true
+
+- No custom domain — live on Railway's generated `flora.up.railway.app`.
+- `.railway/railway.ts` stays in the repo as documentation of the intended topology; it is not
+  what actually provisioned these services (§2's "Rejected alternatives" / this section).
+- Observability (Sentry, structured JSON logs) from architecture §14's table — not built.

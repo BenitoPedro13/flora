@@ -116,6 +116,8 @@ docs/           architecture.md, design-spec.md, tasks/
 | 5 | Weather | ✅ |
 | — | Energy, Carbon Offset | deferred (no data source yet) |
 
+**Deployed:** [flora.up.railway.app](https://flora.up.railway.app) — `apps/web`, `apps/api`, `apps/worker`, Postgres+PostGIS, Redis, and self-hosted MinIO, all on Railway. Seeded with the same demo data (`db:seed` + `db:seed:demo`) real local dev runs against.
+
 Every phase is documented end to end in [`docs/tasks/`](docs/tasks/) — what was planned, why,
 and what was found once it hit a real browser. Workflow and repo conventions are in
 [`CLAUDE.md`](CLAUDE.md).
