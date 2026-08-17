@@ -778,6 +778,166 @@
   }
 }
 
+/* Locks a subtree to light mode regardless of prefers-color-scheme — the
+   landing page (TASK-landing-page) is styled light-only against a
+   photographic background; the embedded AppPreview would otherwise flip to
+   the real app's dark theme on a visitor's system, clashing with the rest
+   of the page. Every property the dark-mode block above overrides,
+   re-declared back to its light (default :root) value — a closer
+   declaration in the tree wins over an ancestor's regardless of which
+   media query matched, so this doesn't need !important. */
+.light-locked {
+  --color-bg-strong-950: var(--color-neutral-950);
+  --color-bg-surface-800: var(--color-neutral-800);
+  --color-bg-sub-300: var(--color-neutral-300);
+  --color-bg-soft-200: var(--color-neutral-200);
+  --color-bg-weak-50: var(--color-neutral-50);
+  --color-bg-weak-25: var(--color-neutral-50);
+  --color-bg-white-0: var(--color-neutral-0);
+  --color-text-strong-950: var(--color-neutral-950);
+  --color-text-sub-600: var(--color-neutral-600);
+  --color-text-soft-400: var(--color-neutral-400);
+  --color-text-disabled-300: var(--color-neutral-300);
+  --color-text-white-0: var(--color-neutral-0);
+  --color-stroke-strong-950: var(--color-neutral-950);
+  --color-stroke-sub-300: var(--color-neutral-300);
+  --color-stroke-soft-200: var(--color-neutral-200);
+  --color-stroke-white-0: var(--color-neutral-0);
+  --color-faded-dark: var(--color-neutral-800);
+  --color-faded-base: var(--color-neutral-500);
+  --color-faded-light: var(--color-neutral-200);
+  --color-faded-lighter: var(--color-neutral-100);
+  --color-information-dark: var(--color-blue-950);
+  --color-information-base: var(--color-blue-500);
+  --color-information-light: var(--color-blue-200);
+  --color-information-lighter: var(--color-blue-50);
+  --color-warning-dark: var(--color-orange-950);
+  --color-warning-base: var(--color-orange-500);
+  --color-warning-light: var(--color-orange-200);
+  --color-warning-lighter: var(--color-orange-50);
+  --color-error-dark: var(--color-red-950);
+  --color-error-base: var(--color-red-500);
+  --color-error-light: var(--color-red-200);
+  --color-error-lighter: var(--color-red-50);
+  --color-success-dark: var(--color-green-950);
+  --color-success-base: var(--color-green-500);
+  --color-success-light: var(--color-green-200);
+  --color-success-lighter: var(--color-green-50);
+  --color-away-dark: var(--color-yellow-950);
+  --color-away-base: var(--color-yellow-500);
+  --color-away-light: var(--color-yellow-200);
+  --color-away-lighter: var(--color-yellow-50);
+  --color-feature-dark: var(--color-purple-950);
+  --color-feature-base: var(--color-purple-500);
+  --color-feature-light: var(--color-purple-200);
+  --color-feature-lighter: var(--color-purple-50);
+  --color-verified-dark: var(--color-sky-950);
+  --color-verified-base: var(--color-sky-500);
+  --color-verified-light: var(--color-sky-200);
+  --color-verified-lighter: var(--color-sky-50);
+  --color-highlighted-dark: var(--color-pink-950);
+  --color-highlighted-base: var(--color-pink-500);
+  --color-highlighted-light: var(--color-pink-200);
+  --color-highlighted-lighter: var(--color-pink-50);
+  --color-stable-dark: var(--color-teal-950);
+  --color-stable-base: var(--color-teal-500);
+  --color-stable-light: var(--color-teal-200);
+  --color-stable-lighter: var(--color-teal-50);
+  --color-primary-light: var(--color-green-100);
+  --color-primary-lighter: var(--color-green-50);
+  --color-overlay-gray: oklch(32.11% 0.0000 0 / 24%);
+  --color-overlay-slate: oklch(30.90% 0.0210 265.90 / 24%);
+  --color-overlay: var(--color-overlay-slate);
+  --color-social-apple: oklch(0.00% 0.0000 0);
+  --color-social-twitter: oklch(6.72% 0.0000 0);
+  --color-social-github: oklch(27.85% 0.0132 253.04);
+  --color-social-notion: oklch(24.96% 0.0096 248.21);
+  --color-social-tidal: oklch(0.00% 0.0000 0);
+  --color-social-amazon: oklch(35.92% 0.0197 248.38);
+  --color-social-zendesk: oklch(19.11% 0.0138 94.02);
+  --shadow-complex-12: 0 80px 80px -40px rgba(23, 23, 23, 0.04),
+    0 48px 48px -24px rgba(23, 23, 23, 0.04);
+  --shadow-colored-gray: 0 20px 20px -10px rgba(23, 23, 23, 0.04),
+    0 10px 10px -5px rgba(23, 23, 23, 0.04),
+    0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px rgba(23, 23, 23, 0.04);
+  --shadow-complex: 0 20px 20px -10px rgba(23, 23, 23, 0.04),
+    0 10px 10px -5px rgba(23, 23, 23, 0.04),
+    0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px rgba(23, 23, 23, 0.08),
+    0 -1px 1px -0.5px rgba(23, 23, 23, 0.06) inset;
+  --shadow-complex-2: 0 10px 10px -5px rgba(23, 23, 23, 0.02),
+    0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px rgba(23, 23, 23, 0.02);
+  --shadow-complex-4: 0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px rgba(23, 23, 23, 0.02);
+  --shadow-complex-5: 0 0 6px 0 rgba(255, 255, 255, 0.24) inset,
+    0 40px 40px -20px rgba(23, 23, 23, 0.06),
+    0 10px 10px -5px rgba(23, 23, 23, 0.06),
+    0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04);
+  --shadow-complex-6: 0 40px 40px -20px rgba(23, 23, 23, 0.06),
+    0 10px 10px -5px rgba(23, 23, 23, 0.06),
+    0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 6px 0 rgba(255, 255, 255, 0.24) inset;
+  --shadow-complex-7: 0 1px 2px 0 rgba(14, 18, 27, 0.24),
+    0 0 0 1px #335cff;
+  --shadow-complex-8: 0 20px 20px -10px rgba(23, 23, 23, 0),
+    0 10px 10px -5px rgba(23, 23, 23, 0),
+    0 6px 6px -3px rgba(23, 23, 23, 0),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0),
+    0 0 0 1px rgba(23, 23, 23, 0.08),
+    0 -1px 1px -0.5px rgba(23, 23, 23, 0.06) inset;
+  --shadow-complex-9: 0 80px 40px -20px rgba(23, 23, 23, 0.06),
+    0 40px 40px -20px rgba(23, 23, 23, 0.06),
+    0 10px 10px -5px rgba(23, 23, 23, 0.06),
+    0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 6px 0 rgba(255, 255, 255, 0.04) inset;
+  --shadow-complex-10: 0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04);
+  --shadow-complex-11: 0 -1px 1px -0.5px rgba(23, 23, 23, 0.06) inset,
+    0 20px 20px -10px rgba(23, 23, 23, 0.04),
+    0 10px 10px -5px rgba(23, 23, 23, 0.04),
+    0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px rgba(23, 23, 23, 0.04);
+  --shadow-custom-input: 0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px rgba(23, 23, 23, 0.08);
+  --shadow-custom-input-2: 0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px var(--color-bg-soft-200);
+  --shadow-custom-input-3: 0 3px 3px -1.5px rgba(23, 23, 23, 0.06),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.06);
+  --shadow-custom-input-4: 0 3px 3px -1.5px rgba(23, 23, 23, 0.06),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.06),
+    0 0 0 1px rgba(23, 23, 23, 0.02);
+  --shadow-custom-input-active: 0 6px 6px -3px rgba(23, 23, 23, 0.02),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1.4px #335cff;
+  --shadow-gray-shadow: 0 0 0 1px rgba(23, 23, 23, 0.08);
+  --shadow-gray-shadow-4: 0 6px 6px -3px rgba(23, 23, 23, 0.04),
+    0 3px 3px -1.5px rgba(23, 23, 23, 0.04),
+    0 1px 1px -0.5px rgba(23, 23, 23, 0.04),
+    0 0 0 1px rgba(23, 23, 23, 0.08),
+    0 -1px 1px -0.5px rgba(23, 23, 23, 0.04) inset;
+}
+
 /* Class-based Dark Mode Support */
 .dark {
   --color-bg-strong-950: var(--color-neutral-0);

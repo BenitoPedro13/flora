@@ -80,18 +80,7 @@ export function Hero() {
           </div>
         </div>
 
-        <div className="flex w-full flex-col items-center justify-center gap-8">
-          <div className="flex items-center gap-6 rounded-2xl border border-stroke-soft-200 bg-bg-white-0 p-4 text-label-sm text-text-sub-600">
-            <span>Home</span>
-            <span>Fields</span>
-            <span>Tasks</span>
-            <span>Weather</span>
-          </div>
-
-          <div className="w-full rounded-[37px] border border-stroke-soft-200 bg-[rgba(253,242,222,0.39)] p-3.5 backdrop-blur-md">
-            <AppPreview />
-          </div>
-        </div>
+        <AppPreview />
       </div>
     </div>
   );

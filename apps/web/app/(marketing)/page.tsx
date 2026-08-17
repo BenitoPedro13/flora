@@ -4,7 +4,9 @@ import { Footer } from "@/components/flora/landing/footer";
 
 export default function LandingPage() {
   return (
-    <main>
+    // Locked light regardless of the visitor's system theme — see
+    // `globals.css`'s `.light-locked` for why (TASK-landing-page).
+    <main className="light-locked">
       <Hero />
       <Features />
       <Footer />
