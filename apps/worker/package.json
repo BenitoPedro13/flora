@@ -11,7 +11,7 @@
     "dev": "pnpm run start:dev",
     "start": "dotenv -e ../../.env -- nest start",
     "start:dev": "dotenv -e ../../.env -- nest start --watch",
-    "start:prod": "dotenv -e ../../.env -- node dist/main",
+    "start:prod": "dotenv -e ../../.env -- node dist/src/main",
     "lint": "eslint \"{src,test}/**/*.ts\" --fix",
     "typecheck": "tsc --noEmit",
     "test": "dotenv -e ../../.env -- vitest run",
