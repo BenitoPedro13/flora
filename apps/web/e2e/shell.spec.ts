@@ -26,7 +26,7 @@ const CREDENTIALS = { email: "owner@flora.local", password: "flora-dev-owner-pas
  * actually having a farm and dashboard data.
  */
 async function goHome(page: Page) {
-  await page.goto("/");
+  await page.goto("/home");
   await expect(page.getByText("Welcome back to Flora™ 👋")).toBeVisible();
 }
 
@@ -201,12 +201,12 @@ test.describe("sidebar", () => {
 test.describe("login", () => {
   test.use({ storageState: { cookies: [], origins: [] } });
 
-  test("valid credentials land on / inside the shell", async ({ page }) => {
+  test("valid credentials land on /home inside the shell", async ({ page }) => {
     await page.goto("/login");
     await page.getByLabel("Email").fill(CREDENTIALS.email);
     await page.getByLabel("Password").fill(CREDENTIALS.password);
     await page.getByRole("button", { name: "Sign in" }).click();
-    await expect(page).toHaveURL("/");
+    await expect(page).toHaveURL("/home");
     await expect(page.getByText("Welcome back to Flora™ 👋")).toBeVisible();
   });
 

@@ -27,7 +27,7 @@ const SIDEBAR_COOKIE = "flora_sidebar";
 // Energy (3:5920) is deferred (architecture §4.3) — restoring it is a
 // one-line addition to this array (design-spec §2.1).
 const NAV_ITEMS = [
-  { href: "/", label: "Home", icon: RiHome4Line },
+  { href: "/home", label: "Home", icon: RiHome4Line },
   { href: "/fields", label: "Fields", icon: RiLandscapeLine },
   { href: "/tasks", label: "Tasks", icon: RiListCheck3 },
   { href: "/weather", label: "Weather", icon: RiSunCloudyLine },

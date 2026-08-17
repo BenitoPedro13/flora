@@ -41,6 +41,7 @@ per screen.
 | — | Energy | `3:5920` | 1440×900 | Designed, **deferred** — see §2.4 |
 | — | Carbon Offset | `3:6566` | 1440×900 | **Not designed — see §2.2** |
 | — | "Frame 167" | `2043:6217` | 1440×901 | Scratch board, not a screen |
+| — | Landing page | `2175:15725` (file `hY3Nd3BBbJsjpihPnfZgpd`) | 1440×10280 | **Hero + Footer shipped at `/`, TASK-landing-page**; Brands/Features/Benefits/Pricing×2/Use Cases/Blog deferred — see that task's §5/§5.1 |
 
 Note the Figma frame names are ordered opposite to the user flow: `Fields - 03` is the entry
 list, `Fields - 01` is the deepest detail view. Renaming them in Figma would help.

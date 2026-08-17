@@ -1,17 +1,24 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
-const PUBLIC_PATHS = ["/login"];
+// Next's proxy matcher (below) excludes _next/static, _next/image, and
+// favicon.ico, but not the rest of public/ — /landing's marketing-page
+// assets are served through here too and need the same public exception.
+const PUBLIC_PATHS = ["/login", "/landing"];
 
 /**
  * An optimistic check only — cookie *presence*, not validity (Next's own
  * guidance: proxy shouldn't be the full auth solution). The access token's
  * actual verification happens in `getSession()` (lib/session.ts), which is
- * what `app/page.tsx` calls before rendering anything.
+ * what `app/(app)/layout.tsx` calls before rendering anything under `(app)`.
+ *
+ * `/` is checked by exact match, not prefix (TASK-landing-page) — it's now
+ * the public marketing page, not a route with children, so `startsWith`
+ * would wrongly swallow every other path too.
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  if (pathname === "/" || PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
     return NextResponse.next();
   }
 

@@ -30,7 +30,7 @@ import { test, expect, type Page } from "@playwright/test";
  */
 
 async function goToHome(page: Page) {
-  await page.goto("/");
+  await page.goto("/home");
   await expect(page.getByText("Welcome back to Flora™ 👋")).toBeVisible();
 }
 
