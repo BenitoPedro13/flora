@@ -10,9 +10,6 @@ export const MARKETING_DESCRIPTION =
   "Our platform empowers agriculture to restore ecosystems, turning your farm into a regenerative success story.";
 
 export function getMetadataBase(): URL {
-  const origin = process.env.WEB_ORIGIN;
-  if (!origin) {
-    throw new Error("WEB_ORIGIN is not set");
-  }
+  const origin = process.env.WEB_ORIGIN ?? "https://flora.farm";
   return new URL(origin);
 }
