@@ -19,6 +19,24 @@ regressions in that shipped work (commit `b52ff5a`):
    either — social-preview crawlers included — got 307'd to `/login` instead of the asset, so
    every OG card and the manually-set SVG favicon silently served the login page.
 
+A third regression surfaced after §2's JSON-LD/`themeColor` work shipped: the user reported the
+live `og:image` (and, on inspection, `og:url`/canonical too) pointed at `https://flora.farm`, not
+the real `https://flora.up.railway.app`. Root cause, confirmed empirically rather than guessed
+(§0's rule): `WEB_ORIGIN` **is** correctly set on the Railway `web` service
+(`railway variables --service web` shows `WEB_ORIGIN=https://flora.up.railway.app`), but `/` and
+`/login` are statically prerendered, so `lib/seo/site.ts`'s `getMetadataBase()` runs once, at
+`next build` time on Railway — the same Railpack build-sandbox limitation `next.config.ts`
+already documents (and had to work around) for `API_URL`. Verified directly: building locally via
+`railway run --service web pnpm --filter web run build` (which genuinely injects Railway's real
+variables into the build process) correctly bakes in `flora.up.railway.app`; the actual
+git-triggered Railway build does not have the same access, so `site.ts`'s pre-existing
+`?? "https://flora.farm"` fallback (added by an earlier, unverified fix, commit `2151b35`) papered
+over the missing var with a domain the project has never actually owned. Fixed in `site.ts`:
+restored the original hard failure for a genuinely missing `WEB_ORIGIN` at runtime, and scoped the
+fallback to `process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD` (Next's own build-time signal,
+confirmed by grepping the installed `next` package's build source, not assumed) with the *correct*
+current domain, not a fictional one.
+
 Both are fixed. A live meta-tag inspection (`curl` against `flora.up.railway.app`) is what
 surfaced the bug — the same "verified live, not by inspection" pattern several earlier tasks
 record. This task is the follow-up hardening pass the user asked for: re-verify the fix, then
@@ -104,6 +122,7 @@ into code that already works. The two additions in §2.2–2.3 are the concrete,
 | `apps/web/lib/seo/structured-data.ts` | new | `getMarketingJsonLd()` — `Organization`/`WebSite`, sourced from `site.ts` |
 | `apps/web/app/layout.tsx` | edit | new `export const viewport` with `themeColor` |
 | `apps/web/public/favicon.svg` | edit | real `logo-leaf.svg` path/gradient in a `bg-primary-base` circle, replacing the invented shape (user-flagged by screenshot, done earlier this session) |
+| `apps/web/lib/seo/site.ts` | edit | build-phase-scoped `WEB_ORIGIN` fallback, correct domain, restored runtime hard-fail |
 
 ## 5. Verification
 
@@ -120,6 +139,12 @@ into code that already works. The two additions in §2.2–2.3 are the concrete,
    checked by hand against schema.org's `Organization`/`WebSite` types instead.)
 5. Favicon rebuild verified visually in a browser at both 16px (tab-icon scale) and 128px against
    the user's reference screenshot — done earlier this session.
+6. `WEB_ORIGIN` fix: `pnpm exec tsc --noEmit` clean. `env -u WEB_ORIGIN pnpm exec next build`
+   (simulating Railway's actual build-phase blind spot) succeeds and bakes `flora.up.railway.app`
+   into `.next/server/app/index.html` — confirmed via `grep -oE 'flora\.[a-z.]+'`, `flora.farm` no
+   longer present anywhere in the output. Once Railway redeploys this commit, re-run the live
+   `curl -s https://flora.up.railway.app/ | grep -oE '<meta property="og:(url|image)"[^>]*>'`
+   check to confirm the production build picks it up the same way.
 
 ## Out of scope
 
