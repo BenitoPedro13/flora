@@ -9,5 +9,6 @@ export default function Image() {
     title: "Fields & Crops",
     description: "Register fields, draw boundaries, and track crop cycles on the map.",
     badge: "Fields",
+    icon: "🌾",
   });
 }

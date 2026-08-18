@@ -9,5 +9,6 @@ export default function Image() {
   return renderOgImage({
     title: "Regenerative farm operations",
     description: MARKETING_DESCRIPTION,
+    icon: "🌱",
   });
 }

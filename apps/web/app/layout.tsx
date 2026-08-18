@@ -18,6 +18,9 @@ export const metadata: Metadata = {
   },
   description: DEFAULT_DESCRIPTION,
   applicationName: SITE_NAME,
+  icons: {
+    icon: "/favicon.svg",
+  },
   robots: {
     index: false,
     follow: false,

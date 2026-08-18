@@ -15,12 +15,14 @@ export default async function Image({ params }: { params: Promise<{ fieldId: str
       title: field.name,
       description: "Satellite crop stress, stress zones, and detections.",
       badge: "Crop Stress",
+      icon: "⚠️",
     });
   } catch {
     return renderOgImage({
       title: "Crop Stress",
       description: "Satellite-derived crop health and stress zones.",
       badge: "Crop Stress",
+      icon: "⚠️",
     });
   }
 }

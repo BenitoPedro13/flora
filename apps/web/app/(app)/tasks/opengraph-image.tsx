@@ -9,5 +9,6 @@ export default function Image() {
     title: "Tasks",
     description: "Plan, track, and complete farm work on the Kanban board.",
     badge: "Tasks",
+    icon: "☑️",
   });
 }

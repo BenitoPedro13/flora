@@ -9,9 +9,10 @@ export type OgImageContent = {
   title: string;
   description?: string;
   badge?: string;
+  icon?: string;
 };
 
-export function OgImage({ title, description, badge = SITE_NAME_MARK }: OgImageContent) {
+export function OgImage({ title, description, badge = SITE_NAME_MARK, icon }: OgImageContent) {
   const hostname = getMetadataBase().hostname;
 
   return (
@@ -27,32 +28,39 @@ export function OgImage({ title, description, badge = SITE_NAME_MARK }: OgImageC
         backgroundImage: `radial-gradient(circle at 85% 15%, ${OG_COLORS.accent} 0%, transparent 45%)`,
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            width: 56,
-            height: 56,
-            borderRadius: 14,
-            backgroundColor: OG_COLORS.primary,
-            color: OG_COLORS.background,
-            fontSize: 28,
-            fontWeight: 700,
-          }}
-        >
-          F
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: 56,
+              height: 56,
+              borderRadius: 14,
+              backgroundColor: OG_COLORS.primary,
+              color: OG_COLORS.background,
+              fontSize: 28,
+              fontWeight: 700,
+            }}
+          >
+            F
+          </div>
+          <span
+            style={{
+              fontSize: 28,
+              fontWeight: 600,
+              color: OG_COLORS.title,
+            }}
+          >
+            {badge}
+          </span>
         </div>
-        <span
-          style={{
-            fontSize: 28,
-            fontWeight: 600,
-            color: OG_COLORS.title,
-          }}
-        >
-          {badge}
-        </span>
+        {icon && (
+          <div style={{ fontSize: 48 }}>
+            {icon}
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 20, maxWidth: 920 }}>

@@ -8,5 +8,6 @@ export default function Image() {
   return renderOgImage({
     title: "Sign in",
     description: "Access your regenerative farm operations console.",
+    icon: "🔐",
   });
 }

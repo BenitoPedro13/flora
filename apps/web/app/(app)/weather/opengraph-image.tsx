@@ -9,5 +9,6 @@ export default function Image() {
     title: "Weather",
     description: "Eight-day forecast with temperature, wind, UV, and hourly detail.",
     badge: "Weather",
+    icon: "🌤️",
   });
 }

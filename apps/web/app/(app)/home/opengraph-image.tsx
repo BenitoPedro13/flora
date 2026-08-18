@@ -9,5 +9,6 @@ export default function Image() {
     title: "Home",
     description: "KPIs, regeneration score, productivity, weather, and tasks at a glance.",
     badge: "Dashboard",
+    icon: "📊",
   });
 }
