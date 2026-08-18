@@ -35,6 +35,7 @@ export function createPageMetadata({
 }: PageMetadataInput): Metadata {
   const metadataBase = getMetadataBase();
   const canonical = new URL(path, metadataBase);
+  const imageUrl = new URL(`${path}/opengraph-image`, metadataBase);
   const imageAlt = ogImageAlt ?? title;
 
   return {
@@ -49,13 +50,13 @@ export function createPageMetadata({
       description,
       url: canonical,
       locale: "en_US",
-      images: [{ url: "./opengraph-image", width: 1200, height: 630, alt: imageAlt }],
+      images: [{ url: imageUrl.toString(), width: 1200, height: 630, alt: imageAlt }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [{ url: "./opengraph-image", alt: imageAlt }],
+      images: [{ url: imageUrl.toString(), alt: imageAlt }],
     },
   };
 }
