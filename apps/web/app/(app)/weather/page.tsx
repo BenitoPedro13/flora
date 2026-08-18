@@ -13,6 +13,14 @@ import { PageContainer } from "@/components/flora/page-container";
 import { PageHeader } from "@/components/flora/page-header";
 import { StaleBadge } from "@/components/flora/stale-badge";
 import { WeatherBoard } from "@/components/flora/weather-board";
+import { createPageMetadata } from "@/lib/seo/metadata";
+
+export const metadata = createPageMetadata({
+  title: "Weather",
+  description: "Eight-day farm forecast with temperature, wind, UV, and hourly detail.",
+  path: "/weather",
+  ogImageAlt: "Flora weather forecast",
+});
 
 /**
  * Weather (`3:5274`, Phase 5, TASK-weather §2.7) — a Server Component

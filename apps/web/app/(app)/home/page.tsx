@@ -23,6 +23,14 @@ import { PlantingProductivityCard } from "@/components/flora/planting-productivi
 import { WeatherCard } from "@/components/flora/weather-card";
 import { GatheringRateCard } from "@/components/flora/gathering-rate-card";
 import { PendingTasksCard } from "@/components/flora/pending-tasks-card";
+import { createPageMetadata } from "@/lib/seo/metadata";
+
+export const metadata = createPageMetadata({
+  title: "Home",
+  description: "Farm dashboard with crop KPIs, regeneration score, productivity, weather, and pending tasks.",
+  path: "/home",
+  ogImageAlt: "Flora home dashboard",
+});
 
 /**
  * Home (`1:12913`, TASK-home-dashboard §2.13) — the first screen that reads

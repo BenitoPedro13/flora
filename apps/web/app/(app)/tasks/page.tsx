@@ -1,6 +1,14 @@
 import { fieldSummarySchema, pageSchema, taskBoardSchema } from "@flora/contracts";
 import { apiFetchServer } from "@/lib/api-client.server";
 import { BoardPanel } from "./board-panel";
+import { createPageMetadata } from "@/lib/seo/metadata";
+
+export const metadata = createPageMetadata({
+  title: "Tasks",
+  description: "Kanban board for farm tasks — plan, track, and complete work across your fields.",
+  path: "/tasks",
+  ogImageAlt: "Flora tasks board",
+});
 
 /**
  * The Tasks screen (`24:11420`, TASK-tasks-board §2.7) — the third and last

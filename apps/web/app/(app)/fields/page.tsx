@@ -2,6 +2,14 @@ import { farmSchema, cropSchema, fieldFeatureCollectionSchema, fieldSummarySchem
 import { z } from "zod";
 import { apiFetchServer } from "@/lib/api-client.server";
 import { FieldListPanel } from "./field-list-panel";
+import { createPageMetadata } from "@/lib/seo/metadata";
+
+export const metadata = createPageMetadata({
+  title: "Fields & Crops",
+  description: "Manage field boundaries, crop cycles, and satellite-derived health on the map.",
+  path: "/fields",
+  ogImageAlt: "Flora fields and crops",
+});
 
 /**
  * The Fields screen (design-spec §5.2, `1:35172`) — the first task-doc
