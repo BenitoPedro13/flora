@@ -37,11 +37,30 @@ fallback to `process.env.NEXT_PHASE === PHASE_PRODUCTION_BUILD` (Next's own buil
 confirmed by grepping the installed `next` package's build source, not assumed) with the *correct*
 current domain, not a fictional one.
 
-Both are fixed. A live meta-tag inspection (`curl` against `flora.up.railway.app`) is what
-surfaced the bug — the same "verified live, not by inspection" pattern several earlier tasks
-record. This task is the follow-up hardening pass the user asked for: re-verify the fix, then
-close the two genuine remaining SEO gaps rather than re-deriving infrastructure that already
-works.
+Checking that fix live turned up a fourth, more fundamental one: **the OG images had never actually
+resolved in production at all.** `createPageMetadata()`'s `openGraph.images`/`twitter.images` both
+hand-built a URL ending in `/opengraph-image` — but Next 16's file convention doesn't serve that
+route at a bare path. It appends a content-hash suffix to the segment itself (e.g.
+`/opengraph-image-pwu6ef`), confirmed by inspecting `.next/routes-manifest.json`, not documented
+anywhere and not something to guess at (§0's rule again). Worse: the docs (`opengraph-image.md`)
+say Next auto-injects the correct `og:image`/`og:image:type`/`og:image:width`/`og:image:height`
+tags for a colocated `opengraph-image.tsx` automatically — hand-setting `openGraph.images` doesn't
+supplement that, it silently *replaces* it with the wrong, 404ing URL. Every route's OG card has
+been broken this way since `TASK-seo-metadata` first shipped it; `proxy.ts`'s `isPublicAsset` check
+(added earlier this session) had the identical bare-path assumption baked into its
+`endsWith("/opengraph-image")` match and needed the same fix. Both are fixed in `metadata.ts`
+(removed the manual `images` fields and the now-unused `ogImageAlt` param — every
+`opengraph-image.tsx` already exports its own `alt`, which was the real, working mechanism the
+whole time) and `proxy.ts` (matches the hash-suffixed path via regex). Verified end-to-end this
+time, not just by reading a meta tag: built locally, started the real server, `curl`'d the
+generated URL, confirmed `200 image/png`, and rendered the PNG — a real 1200×630 branded card,
+not a 404 page.
+
+A live meta-tag inspection (`curl` against `flora.up.railway.app`) is what surfaced the first bug,
+and doing the same after each fix is what caught the next two — the same "verified live, not by
+inspection" pattern several earlier tasks in this repo record. This task started as the follow-up
+hardening pass the user asked for (JSON-LD, `theme-color`) and grew into fixing every layer of the
+OG-image pipeline that pass exposed as never having actually worked.
 
 ## 2. Planned changes
 
@@ -123,6 +142,9 @@ into code that already works. The two additions in §2.2–2.3 are the concrete,
 | `apps/web/app/layout.tsx` | edit | new `export const viewport` with `themeColor` |
 | `apps/web/public/favicon.svg` | edit | real `logo-leaf.svg` path/gradient in a `bg-primary-base` circle, replacing the invented shape (user-flagged by screenshot, done earlier this session) |
 | `apps/web/lib/seo/site.ts` | edit | build-phase-scoped `WEB_ORIGIN` fallback, correct domain, restored runtime hard-fail |
+| `apps/web/lib/seo/metadata.ts` | edit | removed hand-built `openGraph.images`/`twitter.images`/`ogImageAlt` — let Next's file convention auto-inject the real (hash-suffixed) OG image URL |
+| `apps/web/proxy.ts` | edit | `isPublicAsset` now matches the hash-suffixed opengraph-image path, not just the bare one |
+| `apps/web/app/(app)/{home,tasks,fields,weather}/page.tsx`, `app/(app)/fields/[fieldId]/stress/page.tsx`, `app/(marketing)/page.tsx`, `app/(auth)/login/layout.tsx` | edit | dropped the now-unused `ogImageAlt` prop from each `createPageMetadata()` call |
 
 ## 5. Verification
 
@@ -141,10 +163,18 @@ into code that already works. The two additions in §2.2–2.3 are the concrete,
    the user's reference screenshot — done earlier this session.
 6. `WEB_ORIGIN` fix: `pnpm exec tsc --noEmit` clean. `env -u WEB_ORIGIN pnpm exec next build`
    (simulating Railway's actual build-phase blind spot) succeeds and bakes `flora.up.railway.app`
-   into `.next/server/app/index.html` — confirmed via `grep -oE 'flora\.[a-z.]+'`, `flora.farm` no
-   longer present anywhere in the output. Once Railway redeploys this commit, re-run the live
-   `curl -s https://flora.up.railway.app/ | grep -oE '<meta property="og:(url|image)"[^>]*>'`
-   check to confirm the production build picks it up the same way.
+   into `.next/server/app/index.html`. **Confirmed live after deploy** (`60dcf2c2`): `curl -s
+   https://flora.up.railway.app/` now shows `og:url`, `og:image`, and `<link rel="canonical">` all
+   on `flora.up.railway.app`, plus the new `theme-color` meta tag and the JSON-LD `<script>` block
+   from §2.2–2.3.
+7. OG-image hash-suffix fix: `pnpm exec tsc --noEmit` and `pnpm exec eslint app lib/seo` both
+   clean. Full rebuild (`rm -rf .next && next build`) shows the auto-injected `og:image` now reads
+   `.../opengraph-image-pwu6ef?<hash>` with the full `og:image:type`/`:width`/`:height`/`:alt` set
+   Next generates for a file-convention image (previously entirely absent — the hand-built version
+   only ever set a bare URL). `next start` locally, `curl`'d that exact URL: `200 image/png`, and
+   the saved file is a genuine 1200×630 PNG — visually confirmed as the correct branded card, not
+   a 404 page. Not yet deployed as of this writing; re-run the same live check after this commit
+   ships.
 
 ## Out of scope
 

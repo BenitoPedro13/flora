@@ -10,7 +10,6 @@ export const metadata = createPageMetadata({
   description: MARKETING_DESCRIPTION,
   path: "/",
   robots: PUBLIC_ROBOTS,
-  ogImageAlt: "Flora — regenerative farm operations platform",
 });
 
 export default function LandingPage() {

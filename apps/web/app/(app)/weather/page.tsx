@@ -19,7 +19,6 @@ export const metadata = createPageMetadata({
   title: "Weather",
   description: "Eight-day farm forecast with temperature, wind, UV, and hourly detail.",
   path: "/weather",
-  ogImageAlt: "Flora weather forecast",
 });
 
 /**

@@ -32,14 +32,12 @@ export async function generateMetadata({
       title: field.name,
       description: `Crop stress — satellite NDVI imagery, stress zones, and detections for ${field.name}.`,
       path: `/fields/${fieldId}/stress`,
-      ogImageAlt: `Crop stress for ${field.name}`,
     });
   } catch {
     return createPageMetadata({
       title: "Crop Stress",
       description: "Satellite-derived crop health, stress zones, and detections for a field.",
       path: `/fields/${fieldId}/stress`,
-      ogImageAlt: "Flora crop stress",
     });
   }
 }

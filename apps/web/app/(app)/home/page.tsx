@@ -29,7 +29,6 @@ export const metadata = createPageMetadata({
   title: "Home",
   description: "Farm dashboard with crop KPIs, regeneration score, productivity, weather, and pending tasks.",
   path: "/home",
-  ogImageAlt: "Flora home dashboard",
 });
 
 /**

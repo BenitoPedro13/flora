@@ -10,8 +10,6 @@ export type PageMetadataInput = {
   /** Pathname including leading slash, e.g. `/fields`. */
   path: string;
   robots?: RobotsDirective;
-  /** Passed through to openGraph.images alt text when set. */
-  ogImageAlt?: string;
 };
 
 const PRIVATE_ROBOTS: RobotsDirective = {
@@ -31,18 +29,20 @@ export function createPageMetadata({
   description = DEFAULT_DESCRIPTION,
   path,
   robots = PRIVATE_ROBOTS,
-  ogImageAlt,
 }: PageMetadataInput): Metadata {
   const metadataBase = getMetadataBase();
   const canonical = new URL(path, metadataBase);
-  // `path` is "/" for the root route — naively appending "/opengraph-image"
-  // produces "//opengraph-image", which `new URL` parses as protocol-relative
-  // (host "opengraph-image"), not a same-origin path. Strip the trailing
-  // slash first so root and nested paths both join with exactly one slash.
-  const imagePath = path === "/" ? "/opengraph-image" : `${path}/opengraph-image`;
-  const imageUrl = new URL(imagePath, metadataBase);
-  const imageAlt = ogImageAlt ?? title;
 
+  // No `openGraph.images`/`twitter.images` here — every route has a
+  // colocated `opengraph-image.tsx`, and Next's own file convention already
+  // auto-injects the correct `og:image`/`twitter:image` tags for it. Its
+  // real URL carries a per-build content hash (e.g. `/opengraph-image-pwu6ef`,
+  // confirmed by inspecting `.next/routes-manifest.json` — not documented,
+  // and not reproducible by hand here), so a hand-built `/opengraph-image`
+  // URL doesn't just risk going stale, it 404s outright: setting `images`
+  // explicitly overrides the auto-injected one instead of supplementing it.
+  // Route-specific alt text likewise belongs to each `opengraph-image.tsx`'s
+  // own `export const alt`, not here.
   return {
     title,
     description,
@@ -55,13 +55,11 @@ export function createPageMetadata({
       description,
       url: canonical,
       locale: "en_US",
-      images: [{ url: imageUrl.toString(), width: 1200, height: 630, alt: imageAlt }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [{ url: imageUrl.toString(), alt: imageAlt }],
     },
   };
 }

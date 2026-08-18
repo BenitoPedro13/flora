@@ -12,8 +12,15 @@ const PUBLIC_PATHS = ["/login", "/landing"];
 // browser tabs fetch these with no session cookie; without this exception
 // the catch-all check below 307s them to /login instead of the image, so
 // every OG card and the tab icon silently rendered the login page.
+//
+// The real served path isn't a bare "/opengraph-image" — Next appends a
+// content-hash suffix to the segment itself (e.g. "/opengraph-image-pwu6ef",
+// confirmed against `.next/routes-manifest.json`, not documented). Matching
+// only the exact bare path (as an earlier version of this check did) missed
+// every real request and left the exact same 307-to-/login bug in place.
+const OPENGRAPH_IMAGE_PATH = /\/opengraph-image(-[a-z0-9]+)?$/;
 function isPublicAsset(pathname: string): boolean {
-  return pathname === "/favicon.svg" || pathname.endsWith("/opengraph-image");
+  return pathname === "/favicon.svg" || OPENGRAPH_IMAGE_PATH.test(pathname);
 }
 
 /**

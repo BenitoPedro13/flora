@@ -7,7 +7,6 @@ export const metadata = createPageMetadata({
   title: "Tasks",
   description: "Kanban board for farm tasks — plan, track, and complete work across your fields.",
   path: "/tasks",
-  ogImageAlt: "Flora tasks board",
 });
 
 /**

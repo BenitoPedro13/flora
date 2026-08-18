@@ -8,7 +8,6 @@ export const metadata = createPageMetadata({
   title: "Fields & Crops",
   description: "Manage field boundaries, crop cycles, and satellite-derived health on the map.",
   path: "/fields",
-  ogImageAlt: "Flora fields and crops",
 });
 
 /**
