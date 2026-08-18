@@ -35,7 +35,12 @@ export function createPageMetadata({
 }: PageMetadataInput): Metadata {
   const metadataBase = getMetadataBase();
   const canonical = new URL(path, metadataBase);
-  const imageUrl = new URL(`${path}/opengraph-image`, metadataBase);
+  // `path` is "/" for the root route — naively appending "/opengraph-image"
+  // produces "//opengraph-image", which `new URL` parses as protocol-relative
+  // (host "opengraph-image"), not a same-origin path. Strip the trailing
+  // slash first so root and nested paths both join with exactly one slash.
+  const imagePath = path === "/" ? "/opengraph-image" : `${path}/opengraph-image`;
+  const imageUrl = new URL(imagePath, metadataBase);
   const imageAlt = ogImageAlt ?? title;
 
   return {

@@ -6,6 +6,16 @@ import type { NextRequest } from "next/server";
 // assets are served through here too and need the same public exception.
 const PUBLIC_PATHS = ["/login", "/landing"];
 
+// Every route's Next.js file-convention image (opengraph-image.tsx, one per
+// route — see `docs/architecture.md`'s SEO metadata task) plus the
+// hand-drawn favicon in public/. Social-preview crawlers and logged-out
+// browser tabs fetch these with no session cookie; without this exception
+// the catch-all check below 307s them to /login instead of the image, so
+// every OG card and the tab icon silently rendered the login page.
+function isPublicAsset(pathname: string): boolean {
+  return pathname === "/favicon.svg" || pathname.endsWith("/opengraph-image");
+}
+
 /**
  * An optimistic check only — cookie *presence*, not validity (Next's own
  * guidance: proxy shouldn't be the full auth solution). The access token's
@@ -18,7 +28,11 @@ const PUBLIC_PATHS = ["/login", "/landing"];
  */
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (pathname === "/" || PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+  if (
+    pathname === "/" ||
+    PUBLIC_PATHS.some((path) => pathname.startsWith(path)) ||
+    isPublicAsset(pathname)
+  ) {
     return NextResponse.next();
   }
 
