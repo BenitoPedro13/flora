@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Toaster } from "@/components/ui/toast";
 import { DEFAULT_DESCRIPTION, SITE_NAME, getMetadataBase } from "@/lib/seo/site";
+import { OG_COLORS } from "@/lib/seo/og-colors";
 import "./globals.css";
 
 const inter = Inter({
@@ -37,6 +38,13 @@ export const metadata: Metadata = {
     title: SITE_NAME,
     description: DEFAULT_DESCRIPTION,
   },
+};
+
+// themeColor lives on `viewport`, not `metadata` (moved in Next 14) — sets
+// the mobile browser chrome / PWA-install-prompt color. Same brand green as
+// the favicon's circle and every OG image's badge (og-colors.ts).
+export const viewport: Viewport = {
+  themeColor: OG_COLORS.primary,
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

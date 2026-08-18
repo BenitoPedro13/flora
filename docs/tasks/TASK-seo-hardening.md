@@ -42,12 +42,15 @@ to `app/(marketing)/page.tsx` only — the one public, indexable route. No `Sear
 product has no public search surface). Values sourced from `lib/seo/site.ts` constants, no new
 hand-typed strings duplicating `SITE_NAME`/`MARKETING_DESCRIPTION`/`getMetadataBase()`.
 
-### 2.3 `themeColor` in root metadata
+### 2.3 `themeColor` in root `viewport`
 
-`app/layout.tsx`'s `metadata` export has no `themeColor`. Cheap, real: sets the mobile browser
-chrome/PWA-install-prompt color on Android Chrome and iOS Safari. Use `OG_COLORS.primary`
-(`#22a06b`, already the brand green used everywhere else colour is needed — invariant 7) so it
-isn't a new hand-picked hex.
+`app/layout.tsx` has no `themeColor`. Cheap, real: sets the mobile browser chrome /
+PWA-install-prompt color on Android Chrome and iOS Safari. `themeColor` moved out of `metadata`
+into a separate `viewport` export in Next 14 (confirmed against this repo's own vendored
+`node_modules/next/dist/docs/.../generate-viewport.md` per §0's "check current docs" rule) — a
+new `export const viewport: Viewport = { themeColor: OG_COLORS.primary }`, not a field on the
+existing `metadata` object. Uses `OG_COLORS.primary` (`#22a06b`, already the brand green used
+everywhere else colour is needed — invariant 7) so it isn't a new hand-picked hex.
 
 ### 2.4 What this deliberately does *not* touch
 
@@ -97,20 +100,26 @@ into code that already works. The two additions in §2.2–2.3 are the concrete,
 
 | Path | Change | Notes |
 |---|---|---|
-| `apps/web/app/(marketing)/page.tsx` | edit | add JSON-LD `<script>` |
-| `apps/web/lib/seo/structured-data.ts` | new | `Organization`/`WebSite` JSON-LD builder, sourced from `site.ts` |
-| `apps/web/app/layout.tsx` | edit | add `themeColor` |
+| `apps/web/app/(marketing)/page.tsx` | edit | render the JSON-LD `<script>` |
+| `apps/web/lib/seo/structured-data.ts` | new | `getMarketingJsonLd()` — `Organization`/`WebSite`, sourced from `site.ts` |
+| `apps/web/app/layout.tsx` | edit | new `export const viewport` with `themeColor` |
+| `apps/web/public/favicon.svg` | edit | real `logo-leaf.svg` path/gradient in a `bg-primary-base` circle, replacing the invented shape (user-flagged by screenshot, done earlier this session) |
 
 ## 5. Verification
 
 1. Live `curl -sI` against `flora.up.railway.app/favicon.svg`, `/opengraph-image`, and
-   `/fields/opengraph-image` all return `200`.
+   `/fields/opengraph-image` all return `200`. — done, see commit `b52ff5a`.
 2. Live `curl -s .../ | grep og:image` shows the full `https://flora.up.railway.app/opengraph-image`
-   URL, not a protocol-relative host.
-3. `pnpm --filter web typecheck` passes.
-4. View-source on `/` contains a valid `application/ld+json` `<script>` block; paste into
-   Google's Rich Results Test structure (manually, not automated) to confirm no parse errors.
-5. `/` emits `<meta name="theme-color" content="#22a06b">`.
+   URL, not a protocol-relative host. — done, see commit `b52ff5a`.
+3. `pnpm exec tsc --noEmit` and `pnpm exec eslint` both clean on the three changed/new files. — done.
+4. `pnpm exec next build && pnpm exec next start` locally, `curl localhost:4173/`: confirmed a
+   valid `application/ld+json` `<script>` block (`Organization` + `WebSite`, `@id`-linked), a
+   correctly-formed `og:image` URL, and `<meta name="theme-color" content="#22a06b">` all present
+   in the rendered HTML. (Google's Rich Results Test itself wasn't run — that requires posting the
+   page to an external Google tool, which weighed against the value here; the JSON-LD shape was
+   checked by hand against schema.org's `Organization`/`WebSite` types instead.)
+5. Favicon rebuild verified visually in a browser at both 16px (tab-icon scale) and 128px against
+   the user's reference screenshot — done earlier this session.
 
 ## Out of scope
 
