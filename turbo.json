@@ -37,6 +37,22 @@
     "test": {
       "dependsOn": [
         "^build"
+      ],
+      "passThroughEnv": [
+        "NODE_ENV",
+        "DATABASE_URL",
+        "DATABASE_MIGRATION_URL",
+        "REDIS_URL",
+        "S3_*",
+        "R2_PUBLIC_BASE_URL",
+        "NEXT_PUBLIC_MAPBOX_TOKEN",
+        "CDSE_*",
+        "JWT_SIGNING_KEY",
+        "WEB_ORIGIN",
+        "API_URL",
+        "API_PORT",
+        "DOCKER_HOST",
+        "TESTCONTAINERS_*"
       ]
     },
     "test:e2e": {
