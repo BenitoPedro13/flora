@@ -32,6 +32,9 @@
     "typecheck": {
       "dependsOn": [
         "^build"
+      ],
+      "passThroughEnv": [
+        "API_URL"
       ]
     },
     "test": {
