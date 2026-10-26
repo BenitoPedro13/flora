@@ -340,6 +340,17 @@ them were real product bugs:
 4. NFR-4's `grep "@flora/weather" apps/api/src` matched a *comment* saying the package must not
    be imported. The comment was reworded. Plus two `prefer-const` lint errors.
 
+Two more surfaced only on GitHub's runner, once the first push ran CI at all:
+
+5. **Turbo 2's strict env mode stripped CI's job-level env from test tasks.** The
+   boot-assertion test's spawned API failed env validation. It never showed locally, because
+   each script loads `../../.env` inside the task. Declared as `passThroughEnv` on `test` in
+   `turbo.json`. CI now also runs turbo with `--continue`, so a red run lists every failure.
+6. **NFR-2's p95 measured 111.5 ms on the runner** (budget 50 ms, run `40285172765`) with every
+   suite running in parallel; locally it passes under 50. Per the test's own instruction, CI
+   gets a measured floor with headroom (150 ms) and 50 ms holds everywhere else. CI had never
+   passed on this repo before, so there was no earlier runner baseline.
+
 Locally, running every package's testcontainers suite in parallel can time out container
 startup (60 s hooks) on Docker Desktop. Each suite passes run alone. Watch for it in CI, but
 it's not a code fault.
@@ -368,3 +379,44 @@ it's not a code fault.
 9. After teardown, `grep -rn "railway.app\|railway.internal" apps packages` returns nothing
    (comments citing `TASK-railway-deploy` by name stay; they're history).
 10. A DLM snapshot exists within 24 h of deploy.
+
+### 6.1 Outcome (2026-10-26)
+
+Live at **https://d2pfmd74quf6lo.cloudfront.net** (also the GitHub repo's website link now).
+
+| # | Criterion | Result |
+|---|---|---|
+| 1 | `cdk synth` / `cdk diff` | Clean. The first diff listed exactly §2.3's resources plus CDK's auto-delete Lambda for the artifacts bucket |
+| 2 | CI green, every task executing | Run `40286191328`: **the first green CI run in this repo's history**. It took four runs to get there, each surfacing a real failure (§6.0 items 1–6, plus the `web#typecheck`/`next build` race for generated `LayoutProps` types, fixed with `next typegen`) |
+| 3 | Push → automatic deploy | Run `40286481401` triggered from CI, built and pushed all three images, and failed at the instance's parameter read (see below). After the fix, run `40287175642` (dispatch, same sha `ed99c03`, images reused) went green: `deployed ed99c03`, smoke passed |
+| 5 | Health through CloudFront; instance unreachable directly | `/api/v1/health` 200, `/` 200. `http://52.54.76.237:3000` times out |
+| 6 | Bucket private, rasters served | Public access block all `True`; direct S3 GET 403; seeded NDVI PNG through `/rasters/…` 200 `image/png` |
+| 7 | Seeded | `seed` → `seed-demo` → `seed-satellite` → `seed-rollups` → `seed-weather` all succeeded on the instance (via SSM) |
+| 8 | Browser | Logged in and checked the screens on the CloudFront URL yourself |
+| 9 | Railway gone | You tore the Railway project down. `.railway/` and the `railway` devDependency were removed; no `railway.app`/`railway.internal` references remain in code |
+
+Not yet exercised: §6 item 4 (a deliberately broken deploy, then a rollback to an older sha)
+and item 10 (the first DLM snapshot, due 05:00 UTC).
+
+Found live:
+
+- **Instance role couldn't read `/flora/prod/`.** `ssm:GetParametersByPath` is authorized
+  against the path exactly as passed. `deploy.sh`'s `/flora/prod/` is the resource
+  `parameter/flora/prod/`, which the policy's bare `parameter/flora/prod` didn't match. Fixed
+  by granting `parameter/flora/prod/*`, then confirmed on the box before re-running the
+  workflow (20 parameters read and decrypted; no extra KMS grant is needed for the
+  `aws/ssm` key).
+- **The login throttle locked out the shared demo account.** The limit is effectively per email
+  (§6.0 item 1) and counts successful attempts too, so this session's own smoke logins plus a few
+  of yours hit 5/15 min, and the browser got a 429. Cleared by deleting the throttler's two Redis
+  keys (never `FLUSHALL`; BullMQ shares that Redis). If several people share the demo login,
+  either count only failed attempts or trust CloudFront's forwarded client IP. Not changed
+  without your call.
+- **The demo login is public:** `owner@flora.local` / `flora-dev-owner-password`, printed by
+  `packages/db/src/seed.ts` in a public repo (same as on Railway). Fine for a public demo;
+  rotate it if not.
+
+Follow-ups: a custom domain (CloudFront alias + ACM, §5); slimming the images (~1.1 GB, they
+carry dev dependencies); shipping container logs to CloudWatch; bundling the OG images' emoji
+SVGs locally, because `next/og` fetches them from jsDelivr during `next build`, so every build
+needs that CDN (one CI build already failed on it); instance-role S3 credentials (§2.2).

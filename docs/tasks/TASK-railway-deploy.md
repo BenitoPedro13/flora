@@ -1,3 +1,5 @@
+> **Superseded 2026-10-26 by [`TASK-aws-deploy`](TASK-aws-deploy.md)** — Flora now runs on AWS.
+
 # TASK-railway-deploy
 
 ## 1. Current scenario

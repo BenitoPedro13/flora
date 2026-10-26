@@ -83,6 +83,7 @@ Then log in at `localhost:3000/login` with the credentials `pnpm db:seed` prints
 | `pnpm db:studio` | Drizzle Studio against the local database |
 | `pnpm db:seed:bulk` | Add 200 more fields on a grid (pagination fixtures) |
 | `pnpm --filter web test:e2e` | Playwright e2e tests — needs `apps/api` + infra running |
+| `pnpm infra:aws:start` / `stop` / `status` | Start / stop / check the production EC2 instance |
 
 More on the infra stack, including why the local `db` image differs from CI's, in
 [`infra/README.md`](infra/README.md).
@@ -100,7 +101,7 @@ packages/
   contracts/    Zod schemas + inferred types (the API contract)
   db/           Drizzle schema, client, migrations, PostGIS queries
   config/       shared tsconfig, eslint, prettier, env schema
-infra/          docker-compose — Postgres+PostGIS, Redis, MinIO
+infra/          docker-compose (local: Postgres+PostGIS, Redis, MinIO) · aws/ (CDK + prod compose)
 docs/           architecture.md, design-spec.md, tasks/
 ```
 
@@ -116,7 +117,11 @@ docs/           architecture.md, design-spec.md, tasks/
 | 5 | Weather | ✅ |
 | — | Energy, Carbon Offset | deferred (no data source yet) |
 
-**Deployed:** [flora.up.railway.app](https://flora.up.railway.app) — `apps/web`, `apps/api`, `apps/worker`, Postgres+PostGIS, Redis, and self-hosted MinIO, all on Railway. Seeded with the same demo data (`db:seed` + `db:seed:demo`) real local dev runs against.
+**Deployed:** [d2pfmd74quf6lo.cloudfront.net](https://d2pfmd74quf6lo.cloudfront.net) on AWS: one
+EC2 instance running the three apps, Postgres+PostGIS and Redis under docker compose, behind
+CloudFront, with rasters in S3. Every push to `main` that passes CI deploys automatically;
+rollback means re-running the Deploy workflow with an older sha. The instance may be stopped to
+save cost (`pnpm infra:aws:start`). Runbook: [`infra/aws/README.md`](infra/aws/README.md).
 
 Every phase is documented end to end in [`docs/tasks/`](docs/tasks/) — what was planned, why,
 and what was found once it hit a real browser. Workflow and repo conventions are in

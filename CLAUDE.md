@@ -162,6 +162,18 @@ from a live screenshot, not a test. `TASK-spectral-indices` also picked up its o
 division in the gain-stretch formula) and got the identical fix (request `scl`, check class 0).
 Next: `TASK-weather` (Phase 5) — the ingest already stores the full
 7-day/wind/UV/pressure/sunrise-sunset payload Home doesn't read.
+**Deployed (2026-10-26, `TASK-aws-deploy`, superseding `TASK-railway-deploy`):** AWS, stack
+`FloraProd` — one `t3.small` running `infra/aws/compose/docker-compose.prod.yml` behind
+CloudFront (`https://d2pfmd74quf6lo.cloudfront.net`), rasters in a private S3 bucket at
+`/rasters/*`, secrets in SSM `/flora/prod/*`, and `.github/workflows/deploy.yml` deploying every
+green push to `main` (OIDC, no stored AWS keys, no SSH). Runbook: `infra/aws/README.md`.
+Railway is torn down. The
+account is on AWS's **Free plan** (credits plus a 2027-03-27 expiry), which is why the instance
+is a `t3.small` and why stopping it (`pnpm infra:aws:stop`, ~$7/mo stopped) matters. That task
+also found that CI had executed nothing since August (a dead `spike:roundtrip` step) and fixed
+what it was hiding: login throttling had been switched off, `plantingProductivity`
+double-counted same-month replants, and turbo 2's strict env mode strips undeclared variables
+from tasks (build args and CI env now declared in `turbo.json`).
 The retired prototype was deleted by `TASK-foundations` after tagging `prototype-v0`;
 `geo_spike`, the schema spike that proved the PostGIS/Drizzle round-trip, was retired by
 `TASK-domain-schema` once `fields` landed.
@@ -199,7 +211,8 @@ full reasoning; §18 has the rejected alternatives. Do not re-litigate without r
 | Worker | **NestJS standalone** consuming **BullMQ** |
 | Database | **PostgreSQL 16 + PostGIS 3.4** · **Drizzle ORM** + drizzle-kit |
 | Queue / cache | **Redis 7** |
-| Object storage | **Cloudflare R2** (S3-compatible); MinIO locally |
+| Object storage | **AWS S3** (private, via CloudFront OAC); MinIO locally |
+| Deploy | **One EC2 `t3.small` + docker compose behind CloudFront**, CDK in `infra/aws`, CD via GitHub Actions → ECR → SSM (`TASK-aws-deploy`) |
 | Satellite | **Sentinel Hub** via Copernicus Data Space Ecosystem |
 | Weather | **Open-Meteo** |
 | Contracts | **Zod** in `packages/contracts`, imported by both sides — no codegen |

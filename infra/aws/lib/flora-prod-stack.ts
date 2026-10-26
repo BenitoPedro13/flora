@@ -88,16 +88,17 @@ export class FloraProdStack extends Stack {
       repo.grantPull(instanceRole);
     }
     deployArtifacts.grantRead(instanceRole);
+    // GetParametersByPath is authorized against the path exactly as passed:
+    // deploy.sh's `/flora/prod/` is `parameter/flora/prod/`, which the bare
+    // `parameter/flora/prod` ARN doesn't match (found on the first deploy).
+    // `/flora/prod/*` matches it, and every parameter under it.
     instanceRole.addToPolicy(
       new iam.PolicyStatement({
-        actions: ["ssm:GetParametersByPath"],
-        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/flora/prod`],
-      }),
-    );
-    instanceRole.addToPolicy(
-      new iam.PolicyStatement({
-        actions: ["ssm:GetParameters", "ssm:GetParameter"],
-        resources: [`arn:aws:ssm:${this.region}:${this.account}:parameter/flora/prod/*`],
+        actions: ["ssm:GetParametersByPath", "ssm:GetParameters", "ssm:GetParameter"],
+        resources: [
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/flora/prod`,
+          `arn:aws:ssm:${this.region}:${this.account}:parameter/flora/prod/*`,
+        ],
       }),
     );
 
