@@ -277,6 +277,10 @@ describe('observations + stress-zones (e2e)', () => {
     // recorded here per §10's honesty requirement rather than asserted as a
     // production SLA. If this becomes flaky in CI, loosen the threshold and
     // record the real number instead of deleting the assertion.
-    expect(p95).toBeLessThan(50);
+    // It did (TASK-aws-deploy §6.0): on GitHub's shared runner, with turbo
+    // running every package's suite in parallel, p95 measured 111.5ms (run
+    // 40285172765); locally it stays under 50. CI gets a measured floor
+    // with headroom, not a deleted assertion; 50 still holds everywhere else.
+    expect(p95).toBeLessThan(process.env.CI ? 150 : 50);
   });
 });
