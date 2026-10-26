@@ -28,7 +28,10 @@
     "db:seed:rollups": "pnpm --filter @flora/db run seed:rollups",
     "db:seed:weather": "pnpm --filter @flora/db run seed:weather",
     "satellite:live-check": "pnpm --filter @flora/satellite run live-check",
-    "setup": "pnpm install && pnpm run infra:up && pnpm run infra:wait && pnpm run db:migrate"
+    "setup": "pnpm install && pnpm run infra:up && pnpm run infra:wait && pnpm run db:migrate",
+    "infra:aws:start": "aws ec2 start-instances --instance-ids \"$(aws cloudformation describe-stacks --stack-name FloraProd --query \"Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue\" --output text)\" --query \"StartingInstances[0].CurrentState.Name\" --output text",
+    "infra:aws:stop": "aws ec2 stop-instances --instance-ids \"$(aws cloudformation describe-stacks --stack-name FloraProd --query \"Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue\" --output text)\" --query \"StoppingInstances[0].CurrentState.Name\" --output text",
+    "infra:aws:status": "aws ec2 describe-instances --instance-ids \"$(aws cloudformation describe-stacks --stack-name FloraProd --query \"Stacks[0].Outputs[?OutputKey=='InstanceId'].OutputValue\" --output text)\" --query \"Reservations[0].Instances[0].State.Name\" --output text"
   },
   "devDependencies": {
     "dotenv-cli": "11.0.0",

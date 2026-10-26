@@ -1,0 +1,115 @@
+# Production stack on the single EC2 instance (TASK-aws-deploy §2.6).
+# Lives at /opt/flora/ on the box, next to the .env deploy.sh renders from
+# SSM Parameter Store (/flora/prod/*). Images are built in CI and pulled from
+# ECR — nothing is built here.
+#
+# Sized for a 2 GiB t3.small (+2 GiB swap) — the account's Free plan only
+# launches Free Tier eligible types (TASK-aws-deploy §2.1). Every service has
+# an explicit memory budget so one of them can't starve the rest:
+# Postgres ~256 MiB, Redis 96 MiB, api/web 320 MiB heaps, worker 512 MiB
+# (raster decode is the one real peak).
+name: flora
+
+x-app: &app
+  restart: unless-stopped
+  env_file: .env
+  logging:
+    driver: json-file
+    options: { max-size: "20m", max-file: "5" }
+
+services:
+  db:
+    # amd64 instance → the official image, the same one CI tests against.
+    # DB_IMAGE is only overridden for a local Apple Silicon rehearsal.
+    image: ${DB_IMAGE:-postgis/postgis:16-3.4}
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: flora
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?}
+      POSTGRES_DB: flora
+    command:
+      - postgres
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=384MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - max_connections=40
+    volumes:
+      - flora-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flora -d flora"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  cache:
+    image: redis:7-alpine
+    restart: unless-stopped
+    # noeviction: BullMQ requires it — an evicted job key is a lost job.
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?}
+      - --appendonly
+      - "yes"
+      - --maxmemory
+      - 96mb
+      - --maxmemory-policy
+      - noeviction
+    volumes:
+      - flora-cache:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?}
+
+  # One-shot: `docker compose run --rm migrate`. Never on app boot
+  # (architecture §14). The api image carries packages/db + tsx.
+  migrate:
+    <<: *app
+    image: ${REGISTRY:?}/flora/api:${IMAGE_TAG:?}
+    restart: "no"
+    profiles: [ops]
+    working_dir: /app/packages/db
+    command: ["node_modules/.bin/tsx", "src/migrate.ts"]
+    depends_on:
+      db: { condition: service_healthy }
+
+  api:
+    <<: *app
+    image: ${REGISTRY:?}/flora/api:${IMAGE_TAG:?}
+    environment:
+      NODE_OPTIONS: --max-old-space-size=320
+    depends_on:
+      db: { condition: service_healthy }
+      cache: { condition: service_healthy }
+
+  worker:
+    <<: *app
+    image: ${REGISTRY:?}/flora/worker:${IMAGE_TAG:?}
+    environment:
+      NODE_OPTIONS: --max-old-space-size=512
+    depends_on:
+      db: { condition: service_healthy }
+      cache: { condition: service_healthy }
+
+  web:
+    <<: *app
+    image: ${REGISTRY:?}/flora/web:${IMAGE_TAG:?}
+    environment:
+      NODE_OPTIONS: --max-old-space-size=320
+    # The only published port; the security group admits CloudFront only.
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+volumes:
+  flora-db:
+  flora-cache:

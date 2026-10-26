@@ -1,7 +1,9 @@
 # Local infrastructure
 
-PostGIS, Redis, and a MinIO stand-in for Cloudflare R2. All three run via
+PostGIS, Redis, and a MinIO stand-in for S3. All three run via
 `docker-compose.yml`; the root `package.json` wraps the common commands.
+Production (AWS: EC2 + CloudFront, CDK) is documented in
+[`aws/README.md`](aws/README.md).
 
 ## Start / stop / reset
 

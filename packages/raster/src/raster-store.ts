@@ -20,6 +20,8 @@ export interface RasterStoreConfig {
   accessKeyId: string;
   secretAccessKey: string;
   bucket: string;
+  /** Real AWS S3 signs against the bucket's region; R2/MinIO accept "auto". */
+  region?: string;
 }
 
 export function createRasterStore(config: RasterStoreConfig) {
@@ -28,7 +30,7 @@ export function createRasterStore(config: RasterStoreConfig) {
     // MinIO is path-style (`endpoint/bucket/key`); R2 in production accepts
     // both, so this is safe to leave on everywhere rather than branch on env.
     forcePathStyle: true,
-    region: "auto",
+    region: config.region ?? "auto",
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey },
   });
 

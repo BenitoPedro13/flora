@@ -15,6 +15,9 @@ export const envSchema = z.object({
   S3_ACCESS_KEY_ID: z.string().min(1),
   S3_SECRET_ACCESS_KEY: z.string().min(1),
   S3_BUCKET: z.string().min(1),
+  // Only real AWS S3 needs it (TASK-aws-deploy §2.7) — SigV4 signs against the
+  // bucket's region. Unset/blank keeps R2/MinIO's "auto".
+  S3_REGION: z.string().optional(),
   // Composed with a stored raster key to build the public PNG URL returned
   // by the API — never stored itself, never a signed URL (invariant 2).
   R2_PUBLIC_BASE_URL: z.string().url(),

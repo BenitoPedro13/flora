@@ -1,0 +1,152 @@
+name: Deploy
+
+# Continuous deployment to the single EC2 instance (TASK-aws-deploy §2.8).
+# Runs only after CI passes on a push to main — never on a red build — or by
+# hand, which is also the rollback: dispatch with an older commit's sha.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Commit to deploy (defaults to the head of main). An older sha is a rollback.
+        required: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write # GitHub OIDC → the FloraProd deploy role; no AWS keys stored here
+
+env:
+  AWS_REGION: us-east-1
+
+jobs:
+  resolve:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.sha.outputs.sha }}
+    steps:
+      - id: sha
+        env:
+          INPUT_SHA: ${{ inputs.sha }}
+          RUN_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: echo "sha=${INPUT_SHA:-${RUN_SHA:-$GITHUB_SHA}}" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: resolve
+    runs-on: ubuntu-latest
+    environment: production
+    strategy:
+      matrix:
+        app: [web, api, worker]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # A rollback redeploys an image that's already in ECR — don't rebuild it.
+      - id: exists
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: |
+          if aws ecr describe-images --repository-name "flora/${{ matrix.app }}" --image-ids "imageTag=$SHA" >/dev/null 2>&1; then
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.exists.outputs.found != 'true'
+        uses: docker/setup-buildx-action@v4
+
+      - if: steps.exists.outputs.found != 'true'
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: ${{ matrix.app }}
+          push: true
+          tags: ${{ steps.ecr.outputs.registry }}/flora/${{ matrix.app }}:${{ needs.resolve.outputs.sha }}
+          # Only apps/web reads these at build time (Dockerfile). The Mapbox
+          # token is public by design — it ships inside the browser bundle.
+          build-args: |
+            APP=${{ matrix.app }}
+            API_URL=http://api:3001
+            WEB_ORIGIN=${{ vars.WEB_ORIGIN }}
+            NEXT_PUBLIC_MAPBOX_TOKEN=${{ vars.NEXT_PUBLIC_MAPBOX_TOKEN }}
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+
+  deploy:
+    needs: [resolve, build]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.WEB_ORIGIN }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.resolve.outputs.sha }}
+
+      - uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      # The compose file and deploy script ship with the commit that changed
+      # them, instead of drifting on the box.
+      - name: Upload compose artifacts
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+        run: aws s3 cp infra/aws/compose/ "s3://${{ vars.DEPLOY_BUCKET }}/$SHA/" --recursive
+
+      - name: Run deploy.sh on the instance (SSM)
+        env:
+          SHA: ${{ needs.resolve.outputs.sha }}
+          INSTANCE_ID: ${{ vars.INSTANCE_ID }}
+        run: |
+          script="set -euo pipefail
+          aws s3 cp s3://${{ vars.DEPLOY_BUCKET }}/$SHA/ /opt/flora/ --recursive --region $AWS_REGION
+          chmod +x /opt/flora/deploy.sh
+          /opt/flora/deploy.sh $SHA"
+          params=$(jq -n --arg s "$script" '{commands: [$s], executionTimeout: ["900"]}')
+          id=$(aws ssm send-command --instance-ids "$INSTANCE_ID" --document-name AWS-RunShellScript \
+            --comment "deploy $SHA" --parameters "$params" --query Command.CommandId --output text)
+          echo "SSM command $id"
+
+          # `aws ssm wait command-executed` gives up after ~100s; an image
+          # pull plus migrations can take longer, so poll for up to 15 min.
+          for _ in $(seq 1 180); do
+            status=$(aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" \
+              --query Status --output text 2>/dev/null || echo Pending)
+            case "$status" in Pending|InProgress|Delayed) sleep 5 ;; *) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$id" --instance-id "$INSTANCE_ID" \
+            --query '[StandardOutputContent, StandardErrorContent]' --output text
+          echo "status: $status"
+          test "$status" = Success
+
+  smoke:
+    needs: deploy
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Health through CloudFront
+        env:
+          ORIGIN: ${{ vars.WEB_ORIGIN }}
+        run: |
+          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$ORIGIN/api/v1/health"; echo
+          curl -fsS --retry 5 --retry-delay 5 --retry-all-errors "$ORIGIN/api/v1/ready"; echo
+          curl -fsS -o /dev/null -w "/ %{http_code}\n" "$ORIGIN/"
