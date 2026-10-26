@@ -17,18 +17,22 @@ import {
  */
 @Injectable()
 export class DashboardService {
-  async get(tx: Tx, organizationId: string, farmId: string): Promise<Dashboard> {
+  async get(
+    tx: Tx,
+    organizationId: string,
+    farmId: string,
+  ): Promise<Dashboard> {
     const farm = await getFarm(tx, organizationId, farmId);
     if (!farm) {
       throw new NotFoundException();
     }
 
-    let { latest, sevenDaysAgo } = await getFarmRollup(tx, organizationId, farmId);
-    let { current: currentScore, previous: previousScore } = await getFarmScore(
-      tx,
-      organizationId,
-      farmId,
-    );
+    const rollup = await getFarmRollup(tx, organizationId, farmId);
+    const { sevenDaysAgo } = rollup;
+    let { latest } = rollup;
+    const score = await getFarmScore(tx, organizationId, farmId);
+    const { previous: previousScore } = score;
+    let { current: currentScore } = score;
 
     // Every farm starts with no rollup — a "your summary is being prepared"
     // screen on first login is a worse first impression than one aggregate
@@ -36,7 +40,11 @@ export class DashboardService {
     if (!latest) {
       const today = farmLocalDate(farm.timezone);
       const built = await buildFarmRollup(tx, organizationId, farmId, today);
-      latest = { day: today, payload: built.rollup, computedAt: new Date().toISOString() };
+      latest = {
+        day: today,
+        payload: built.rollup,
+        computedAt: new Date().toISOString(),
+      };
       currentScore = {
         computedOn: today,
         score: built.score.score,
@@ -49,15 +57,24 @@ export class DashboardService {
     const kpis: DashboardKpis = {
       cropsStockedKg: {
         value: latest.payload.cropsStocked.totalKg,
-        deltaPct: kpiDelta(latest.payload.cropsStocked.totalKg, sevenDaysAgo?.payload.cropsStocked.totalKg),
+        deltaPct: kpiDelta(
+          latest.payload.cropsStocked.totalKg,
+          sevenDaysAgo?.payload.cropsStocked.totalKg,
+        ),
       },
       fieldsAtRisk: {
         value: latest.payload.fieldsAtRiskCount,
-        deltaPct: kpiDelta(latest.payload.fieldsAtRiskCount, sevenDaysAgo?.payload.fieldsAtRiskCount),
+        deltaPct: kpiDelta(
+          latest.payload.fieldsAtRiskCount,
+          sevenDaysAgo?.payload.fieldsAtRiskCount,
+        ),
       },
       waterUsedM3: {
         value: latest.payload.waterUsedM3,
-        deltaPct: kpiDelta(latest.payload.waterUsedM3, sevenDaysAgo?.payload.waterUsedM3),
+        deltaPct: kpiDelta(
+          latest.payload.waterUsedM3,
+          sevenDaysAgo?.payload.waterUsedM3,
+        ),
       },
     };
 
@@ -75,7 +92,11 @@ export class DashboardService {
           formulaVersion: currentScore!.formulaVersion,
         },
         previous: previousScore
-          ? { score: previousScore.score, class: previousScore.class, computedOn: previousScore.computedOn }
+          ? {
+              score: previousScore.score,
+              class: previousScore.class,
+              computedOn: previousScore.computedOn,
+            }
           : null,
       },
       plantingProductivity: latest.payload.plantingProductivity,
@@ -89,7 +110,10 @@ export class DashboardService {
 
 /** `en-CA` formats as `YYYY-MM-DD` — the farm's own local date, never the server's (architecture §5.3's pattern for `GROWTH_PCT_SQL`). */
 function farmLocalDate(timezone: string): string {
-  return new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(
-    new Date(),
-  );
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }

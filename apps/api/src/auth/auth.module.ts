@@ -23,8 +23,10 @@ import { TokenService } from './token.service.js';
       }),
     }),
     // 5 attempts / 15 min per (IP, email), backed by the Redis already in
-    // compose (TASK-auth-tenancy §2.4) — applied to /auth/login and
-    // /auth/refresh via AuthThrottlerGuard, not registered globally here.
+    // compose (TASK-auth-tenancy §2.4) — applied to /auth/login via
+    // AuthThrottlerGuard, not registered globally here. Behind apps/web's
+    // proxy "IP" is the proxy's, so in practice this is per email
+    // (TASK-aws-deploy §6).
     ThrottlerModule.forRootAsync({
       useFactory: () => ({
         throttlers: [{ limit: 5, ttl: 15 * 60 * 1000 }],

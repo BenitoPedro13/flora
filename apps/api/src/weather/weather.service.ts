@@ -9,13 +9,18 @@ const STALE_AFTER_MS = 2 * 60 * 60 * 1000;
 /**
  * `GET /farms/:id/weather` (architecture §8, TASK-weather §2.4). No SQL
  * here (invariant 5) — every read goes through `@flora/db`. This service
- * imports `@flora/db` and nothing else — `@flora/weather`'s Open-Meteo
+ * imports `@flora/db` and nothing else — the weather package's Open-Meteo
  * client belongs to the worker's ingest job, never a request handler
  * (invariant 1, NFR-4).
  */
 @Injectable()
 export class WeatherService {
-  async get(tx: Tx, organizationId: string, farmId: string, days: number): Promise<FarmWeather> {
+  async get(
+    tx: Tx,
+    organizationId: string,
+    farmId: string,
+    days: number,
+  ): Promise<FarmWeather> {
     const farm = await getFarm(tx, organizationId, farmId);
     if (!farm) {
       throw new NotFoundException();
@@ -23,7 +28,9 @@ export class WeatherService {
 
     const week = await getFarmWeek(tx, organizationId, farmId, days);
 
-    const isStale = !week.observedAt || Date.now() - week.observedAt.getTime() > STALE_AFTER_MS;
+    const isStale =
+      !week.observedAt ||
+      Date.now() - week.observedAt.getTime() > STALE_AFTER_MS;
 
     const days_: FarmWeatherDay[] = week.days.map((row) => ({
       date: row.payload.date,

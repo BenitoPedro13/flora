@@ -3,6 +3,7 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createDbClient } from "../client.js";
 import { organizations, users } from "../schema/auth.js";
+import { cropCycles } from "../schema/field.js";
 import { startTestInfra, type TestInfra } from "../test/containers.js";
 import { withOrganization } from "../tenancy.js";
 import { insertField } from "./fields.js";
@@ -197,6 +198,41 @@ describe("rollups queries", () => {
         }
         // A month with no overlapping cycle at all exists (e.g. far in the past window edge).
         expect(months.some((m) => m.byCrop.length === 0)).toBe(true);
+      });
+    });
+
+    it("counts a field once per month when it is harvested and replanted within that month", async () => {
+      // Found live (TASK-aws-deploy): Corn harvested 2026-07-06 and Corn
+      // replanted 2026-07-16 on the same field both touch July, and summing
+      // per (month, crop) counted the field twice — a 200% share that failed
+      // the dashboard contract's own validation. Own farm, so the shared
+      // fixture's cycles don't change under the other tests.
+      const { rows } = await owner.pool.query<{ id: string }>(
+        `INSERT INTO farms (organization_id, name, location, timezone)
+         VALUES ($1, 'Replant Farm', ST_GeomFromGeoJSON($2), 'America/Manaus') RETURNING id`,
+        [orgId, JSON.stringify({ type: "Point", coordinates: [-59.13, -4.58] })],
+      );
+      const replantFarmId = rows[0]!.id;
+      await withOrganization(owner.db, orgId, async (tx) => {
+        const fieldId = await insertField(tx, {
+          organizationId: orgId,
+          farmId: replantFarmId,
+          name: "Replant Field",
+          boundary: FIELD_A,
+          position: 1,
+        });
+        await tx.insert(cropCycles).values([
+          { organizationId: orgId, fieldId, cropId: cornId, plantedOn: "2026-04-22", expectedHarvestOn: "2026-07-06", status: "harvested" },
+          { organizationId: orgId, fieldId, cropId: cornId, plantedOn: "2026-07-16", expectedHarvestOn: "2026-09-30", status: "growing" },
+          // A different crop squeezed into the same month must not push the
+          // field's total past 100% either — the cycle covering more of the
+          // month wins it.
+          { organizationId: orgId, fieldId, cropId: wheatId, plantedOn: "2026-07-07", expectedHarvestOn: "2026-07-15", status: "harvested" },
+        ]);
+
+        const months = await plantingProductivity(tx, orgId, replantFarmId, asOf);
+        const july = months.find((m) => m.month === "2026-07-01")!;
+        expect(july.byCrop).toEqual([{ crop: "Corn", sharePct: 100 }]);
       });
     });
   });

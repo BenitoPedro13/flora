@@ -26,7 +26,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
-  // @UseGuards(AuthThrottlerGuard)
+  @UseGuards(AuthThrottlerGuard)
   @Post('login')
   @HttpCode(HttpStatus.NO_CONTENT)
   async login(
@@ -42,8 +42,13 @@ export class AuthController {
     setSessionCookies(res, tokens);
   }
 
+  // Deliberately unthrottled (TASK-aws-deploy §6): every request reaches the
+  // API through apps/web's rewrite proxy, so req.ip is the proxy's, and the
+  // guard's IP-only fallback (no email in this body) became one 5-per-15-min
+  // bucket shared by every user — SessionRefresher's 10-min renewals 429'd
+  // sessions. A refresh token is a 256-bit rotating secret with reuse
+  // detection, so there is nothing to brute-force here anyway.
   @Public()
-  // @UseGuards(AuthThrottlerGuard)
   @Post('refresh')
   @HttpCode(HttpStatus.NO_CONTENT)
   async refresh(

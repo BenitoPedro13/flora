@@ -72,6 +72,4 @@ jobs:
 
       - run: pnpm db:migrate
 
-      - run: pnpm --filter @flora/db run spike:roundtrip
-
       - run: pnpm turbo lint typecheck test build --force

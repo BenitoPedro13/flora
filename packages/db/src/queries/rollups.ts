@@ -125,19 +125,32 @@ export async function plantingProductivity(
     ),
     farm_area AS (
       SELECT COALESCE(SUM(area_m2), 0) AS total_m2 FROM farm_fields
+    ),
+    -- One cycle per (month, field): the one covering the most days of that
+    -- month. A field harvested and replanted within one month touches it
+    -- with two cycles, and summing both double-counted its area — a share
+    -- over 100% (TASK-aws-deploy §6).
+    field_months AS (
+      SELECT DISTINCT ON (m.month_start, ff.id)
+        m.month_start, ff.area_m2, cc.crop_id, cc.organization_id
+      FROM months m
+      JOIN crop_cycles cc ON cc.organization_id = ${organizationId}
+        AND cc.planted_on <= (m.month_start + interval '1 month' - interval '1 day')::date
+        AND cc.expected_harvest_on >= m.month_start
+      JOIN farm_fields ff ON ff.id = cc.field_id
+      ORDER BY m.month_start, ff.id,
+        LEAST(cc.expected_harvest_on, (m.month_start + interval '1 month' - interval '1 day')::date)
+          - GREATEST(cc.planted_on, m.month_start) DESC,
+        cc.planted_on DESC
     )
     SELECT
-      m.month_start::text AS month,
+      fm.month_start::text AS month,
       c.name AS crop_name,
-      SUM(ff.area_m2) / NULLIF((SELECT total_m2 FROM farm_area), 0) * 100 AS share_pct
-    FROM months m
-    JOIN crop_cycles cc ON cc.organization_id = ${organizationId}
-      AND cc.planted_on <= (m.month_start + interval '1 month' - interval '1 day')::date
-      AND cc.expected_harvest_on >= m.month_start
-    JOIN farm_fields ff ON ff.id = cc.field_id
-    JOIN crops c ON c.organization_id = cc.organization_id AND c.id = cc.crop_id
-    GROUP BY m.month_start, c.name
-    ORDER BY m.month_start, c.name
+      SUM(fm.area_m2) / NULLIF((SELECT total_m2 FROM farm_area), 0) * 100 AS share_pct
+    FROM field_months fm
+    JOIN crops c ON c.organization_id = fm.organization_id AND c.id = fm.crop_id
+    GROUP BY fm.month_start, c.name
+    ORDER BY fm.month_start, c.name
   `);
 
   const months = last12MonthKeys(asOf);

@@ -87,14 +87,17 @@ describe("stress-zones queries", () => {
   });
 
   it("derives areaM2 via ST_Area rather than storing it, and new zones are unclassified (§2.9)", async () => {
+    // isNew is `detected_on > current_date - 7`, so this zone's dates are
+    // relative to today — a fixed date silently stops being "new" a week later.
+    const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
     await withOrganization(owner.db, orgId, async (tx) => {
       const id = await insertStressZone(tx, {
         organizationId: orgId,
         fieldId,
         geometry: square(-59.133, -4.585, -59.132, -4.584),
-        detectedOn: "2026-08-10",
-        windowStart: "2026-08-01",
-        windowEnd: "2026-08-10",
+        detectedOn: daysAgo(1),
+        windowStart: daysAgo(10),
+        windowEnd: daysAgo(1),
         severity: "high",
         indexValue: 0.2,
       });
