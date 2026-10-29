@@ -21,3 +21,6 @@ build/
 tmp/
 coverage/
 test_env/
+
+# Existing portfolio images are linked only for local preview; source inventory is committed.
+portfolio-preview/assets
