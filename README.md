@@ -1,5 +1,7 @@
 # 🌱 Flora
 
+[Explore the guided interface preview](https://d2pfmd74quf6lo.cloudfront.net/rasters/portfolio-preview/v1/index.html) — sample farm screens, available while the full app is stopped.
+
 **An operations console for regenerative farming** — fields, crops, satellite-derived crop
 health, tasks, and weather, in one place.
 
